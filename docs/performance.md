@@ -41,3 +41,48 @@ That is 1.9 MB of working set for runtime and strings per 10k entries, with the
 whole `FileEntry[]` and its path strings held on the heap. The USN index in
 v0.4.0 moves that data into a memory-mapped file so it no longer scales with the
 heap.
+
+## The window, v0.3.0
+
+The same 100k snapshot, this time inside the launcher:
+
+| Case | Working set |
+|---|---:|
+| Hidden after load | 33.8 MB |
+| Visible, painting, results shown | 38.5 MB |
+| Folder scan of a small tree (`D:\Glide`) | 14.3 MB |
+
+`scripts/ui-smoke.ps1` drives the published binary: it presses Ctrl+Alt+Space,
+checks the window takes focus, posts keystrokes, screenshots the result, revokes
+focus and checks the window hides, then reopens and closes it with Escape.
+
+Two bugs that only a real desktop could show up:
+
+1. `PlaceWindow` used `SWP_SHOWWINDOW`, so the window became active before
+   `_visible` and `_shownAt` were set. Deactivation then looked like a spurious
+   event and the launcher stopped hiding.
+2. `AttachThreadInput` was used unconditionally to grab the foreground. The
+   window looked focused to the window manager while the thread had no active
+   window, so no `WM_ACTIVATE` arrived on deactivation. The plain
+   `SetForegroundWindow` call works because `WM_HOTKEY` already grants foreground
+   rights; attaching is now only the fallback.
+
+Hiding is guarded by a 400 ms timer: after `Show()` the window verifies once that
+it really owns the foreground and hides itself if it does not. That covers both a
+refused foreground request and an immediate focus steal without leaving a topmost
+window floating over other applications.
+
+## Folder scan cap
+
+Real profile paths average longer than the synthetic bench paths, and a string
+per entry does not fit the budget at full scale:
+
+| Entries | Working set |
+|---:|---:|
+| 60,000 | 37.4 MB |
+| 75,000 | 43.8 MB |
+| 100,000 | 53.2 MB |
+| 200,000 | 88.2 MB |
+
+The default cap is 75,000. Scanning 200,000 entries takes 7.6 s and 88 MB; the
+cap is the honest v0.3 boundary until the compact store lands.

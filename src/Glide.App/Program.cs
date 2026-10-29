@@ -1,17 +1,14 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Globalization;
+using Glide.App.Ui;
 using Glide.Core.Snapshot;
 
 namespace Glide.App;
 
-/// <summary>
-/// Command line for v0.2.0. The search window arrives in v0.3.0; until then the
-/// app exists to load snapshots and to be measured, so the memory and latency
-/// gates are real numbers instead of promises.
-/// </summary>
 internal static class Program
 {
     private const int ResultLimit = 50;
+    private const string InstanceMutexName = @"Local\Glide.Singleton";
 
     private static int Main(string[] args)
     {
@@ -27,16 +24,36 @@ internal static class Program
                 return RunIdle(args, idle);
             }
 
-            Console.WriteLine("Glide 0.2.0");
-            Console.WriteLine("  --bench --snapshot <file> [--query <text>] [--iterations <n>] [--budget-ms <n>]");
-            Console.WriteLine("  --snapshot <file> --idle <seconds>");
-            return 0;
+            if (HasFlag(args, "--help") || HasFlag(args, "-h") || HasFlag(args, "/?"))
+            {
+                PrintUsage();
+                return 0;
+            }
+
+            return RunUi(args);
         }
-        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException or FormatException)
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException or FormatException or InvalidOperationException)
         {
             Console.Error.WriteLine(ex.Message);
             return 1;
         }
+    }
+
+    private static int RunUi(string[] args)
+    {
+        using var mutex = new Mutex(initiallyOwned: true, InstanceMutexName, out bool isFirstInstance);
+
+        if (!isFirstInstance)
+        {
+            SearchWindow.RequestShow();
+            return 0;
+        }
+
+        return SearchWindow.Run(
+            GetValue(args, "--snapshot"),
+            GetValue(args, "--scan"),
+            HasFlag(args, "--show"),
+            GetInteger(args, "--max-entries", 75_000));
     }
 
     private static int RunBench(string[] args)
@@ -107,6 +124,18 @@ internal static class Program
 
         Thread.Sleep(TimeSpan.FromSeconds(seconds));
         return 0;
+    }
+
+    private static void PrintUsage()
+    {
+        Console.WriteLine("Glide 0.3.0");
+        Console.WriteLine("  glide                          run the launcher (Ctrl+Alt+Space)");
+        Console.WriteLine("  glide --show                   open the window, starting the app if needed");
+        Console.WriteLine("  glide --scan <folder>          index a folder instead of the user profile");
+        Console.WriteLine("  glide --max-entries <n>        cap the scanned entries (default 75000)");
+        Console.WriteLine("  glide --snapshot <file>        load a snapshot file instead of scanning");
+        Console.WriteLine("  glide --bench --snapshot <f> [--query <text>] [--iterations <n>] [--budget-ms <n>]");
+        Console.WriteLine("  glide --snapshot <file> --idle <seconds>");
     }
 
     private static double Percentile(double[] sorted, double fraction)

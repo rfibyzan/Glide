@@ -3,7 +3,8 @@ param(
     [string]$AppArgs = "",
     [int]$BudgetMB = 50,
     [int]$Seconds = 5,
-    [int]$SampleMs = 200
+    [int]$SampleMs = 200,
+    [int]$Duration = 0
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,9 +19,10 @@ if ([string]::IsNullOrWhiteSpace($AppArgs)) {
 
 $process = Start-Process -FilePath $Exe -ArgumentList $AppArgs -PassThru
 $samples = New-Object System.Collections.Generic.List[double]
+$stopAt = if ($Duration -gt 0) { (Get-Date).AddSeconds($Duration) } else { [datetime]::MaxValue }
 
 try {
-    while (-not $process.HasExited) {
+    while (-not $process.HasExited -and (Get-Date) -lt $stopAt) {
         $process.Refresh()
         $samples.Add($process.WorkingSet64 / 1MB)
         Start-Sleep -Milliseconds $SampleMs

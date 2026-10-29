@@ -37,8 +37,23 @@ show that the chosen stack costs a fraction of the replaced UI process.
 
 ```
 dotnet publish src\Glide.App\Glide.App.csproj -c Release -r win-x64 -o artifacts\publish
-powershell -File scripts\measure-memory.ps1
+powershell -File scripts\measure-memory.ps1 -AppArgs "--snapshot artifacts\bench-100k.txt" -Duration 8
+powershell -File scripts\ui-smoke.ps1
 ```
 
 The script samples `WorkingSet64` and exits non-zero when p95 exceeds the budget.
-Budget for v0.2.0 and later: 50 MB idle. Raise it only with a recorded reason.
+`-Duration` stops sampling after N seconds, which is how the resident launcher is
+measured. Budget for v0.2.0 and later: 50 MB idle. Raise it only with a recorded reason.
+
+## UI, v0.3.0
+
+| Case | Working set |
+|---|---:|
+| Hidden, 100k snapshot entries | 33.8 MB |
+| Window shown, 100k snapshot entries | 38.5 MB |
+| Folder scan, 75k profile entries | 43.8 MB |
+| Folder scan, 200k profile entries | 88.2 MB, rejected |
+
+The 200k case is why the scan is capped. A path string on the managed heap costs
+about 390 bytes per real entry, so the cap is a budget decision, not a product
+decision; v0.4 replaces those strings with a compact memory-mapped store.
