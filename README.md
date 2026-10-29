@@ -16,7 +16,7 @@ under 50 MB idle as a single native-AOT process.
 | v0.1.1 | Native-AOT shell and memory gate | done, 8.3 MB p95 idle |
 | v0.2.0 | Snapshot store, latency and memory gates | done, 5.2 ms p95, 32.9 MB with 100k entries |
 | v0.3.0 | Window, global hotkey, folder scan | done, 38.5 MB with 100k entries shown, UI smoke green |
-| v0.4.0 | NTFS USN index for whole drives | done, 18.4 MB with a 100k index, 21 ms p50 at 1M |
+| v0.4.0 | NTFS USN index for whole drives | done, 18.4 MB with a 100k index, 19 ms p50 at 1M |
 | v0.5.0 | Actions, calculator, bookmarks, history | planned |
 | v0.6.0 | Quick switch in file dialogs | planned |
 
