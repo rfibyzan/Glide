@@ -81,6 +81,15 @@ the journal being wrapped by its own size limit.
 Incremental updates are the obvious next step, and the journal state needed for
 them is already kept per volume.
 
+## Known limits
+
+- One path per file id. A hard link has several names and only the last record
+  seen in the enumeration is kept.
+- Volume mount points other than a drive letter are not resolved; such a volume
+  is skipped because only single letters are enumerated.
+- A rebuild is a full rebuild. While it runs, queries keep using the previous
+  file, so the only cost is the enumeration's memory inside the service.
+
 ## What it costs
 
 - Index file: 50 bytes per entry, so 50 MB for a million entries.
