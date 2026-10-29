@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Glide.Service</RootNamespace>
+    <AssemblyName>glide-service</AssemblyName>
+
+    <!-- The service is the only process allowed to read the USN journal, so it
+         must be small and self-contained. -->
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <IlcOptimizationPreference>Size</IlcOptimizationPreference>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Glide.Core\Glide.Core.csproj" />
+  </ItemGroup>
+
+</Project>

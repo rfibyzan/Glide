@@ -80,7 +80,7 @@ public static class IndexFile
             FileMode.Open,
             FileAccess.Read,
             FileShare.ReadWrite | FileShare.Delete,
-            FileOptions.SequentialScan | FileOptions.Asynchronous);
+            FileOptions.SequentialScan);
     }
 }
 

@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
+using Glide.App.Search;
 using Glide.App.Ui;
 using Glide.Core.Index;
 using Glide.Core.Snapshot;
@@ -75,8 +76,28 @@ internal static class Program
         return SearchWindow.Run(
             GetValue(args, "--snapshot"),
             GetValue(args, "--scan"),
+            ResolveIndexPaths(args),
             HasFlag(args, "--show"),
             GetInteger(args, "--max-entries", 75_000));
+    }
+
+    /// <summary>
+    /// An explicit <c>--index</c> wins, then a snapshot, then whatever the service
+    /// left in ProgramData. <c>--no-index</c> forces the folder scan.
+    /// </summary>
+    private static string[] ResolveIndexPaths(string[] args)
+    {
+        if (HasFlag(args, "--no-index") || HasFlag(args, "--snapshot") || HasFlag(args, "--scan"))
+        {
+            return [];
+        }
+
+        if (GetValue(args, "--index") is string requested)
+        {
+            return IndexLocator.Resolve(requested);
+        }
+
+        return IndexLocator.Find();
     }
 
     private static int RunIndexBuild(string[] args)
@@ -351,10 +372,12 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.WriteLine("Glide 0.3.0");
+        Console.WriteLine("  glide 0.4.0");
         Console.WriteLine("  glide                          run the launcher (Ctrl+Alt+Space)");
         Console.WriteLine("  glide --show                   open the window, starting the app if needed");
         Console.WriteLine("  glide --scan <folder>          index a folder instead of the user profile");
+        Console.WriteLine("  glide --index <path>           search index files from the service (file or folder)");
+        Console.WriteLine("  glide --no-index               ignore index files and scan the profile");
         Console.WriteLine("  glide --max-entries <n>        cap the scanned entries (default 75000)");
         Console.WriteLine("  glide --snapshot <file>        load a snapshot file instead of scanning");
         Console.WriteLine("  glide --bench --snapshot <f> [--query <text>] [--iterations <n>] [--budget-ms <n>]");

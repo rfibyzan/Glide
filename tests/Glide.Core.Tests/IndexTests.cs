@@ -146,4 +146,36 @@ public sealed class IndexTests : IDisposable
 
         Assert.Equal(2, IndexSearchSource.Search(_path, "report", 5).Count);
     }
+
+    [Fact]
+    public void SearchManyRanksLikeOneIndexOverTheUnion()
+    {
+        string second = _path + ".second.gidx";
+
+        try
+        {
+            FileEntry[] first = [.. Entries.Where(e => e.Path.StartsWith(@"C:\", StringComparison.Ordinal))];
+            FileEntry[] rest = [.. Entries.Where(e => !e.Path.StartsWith(@"C:\", StringComparison.Ordinal))];
+
+            IndexWriter.Write(_path, first);
+            IndexWriter.Write(second, rest);
+
+            foreach (string query in new[] { "report", "docs", "glide", "résumé" })
+            {
+                IReadOnlyList<SearchResult> expected = SearchEngine.Search(Entries, query, 5);
+                IReadOnlyList<SearchResult> actual = IndexSearchSource.SearchMany([_path, second], query, 5);
+
+                Assert.Equal(expected.Select(r => r.Entry.Path), actual.Select(r => r.Entry.Path));
+            }
+
+            // An empty query has no ranking to merge: it returns the first rows in
+            // file order, filling from the second file only when the first runs out.
+            Assert.Equal(5, IndexSearchSource.SearchMany([_path, second], "", 5).Count);
+        }
+        finally
+        {
+            File.Delete(second);
+            File.Delete(second + ".tmp");
+        }
+    }
 }

@@ -41,7 +41,62 @@ public static class IndexSearchSource
 
         return workers == 1
             ? ScanRange(handle, header.RecordsOffset, header.RecordsOffset + header.RecordsLength, terms, termBytes, limit, alignStart: false)
-            : ScanInParallel(handle, header, terms, termBytes, limit, workers);
+            : ScanInParallel(indexPath, header, terms, termBytes, limit, workers);
+    }
+
+    /// <summary>
+    /// Searches several index files, one per volume, and merges the top lists with
+    /// the same rules a single file uses. A query that spans volumes must rank
+    /// exactly as if every entry lived in one index.
+    /// </summary>
+    public static IReadOnlyList<SearchResult> SearchMany(
+        IReadOnlyList<string> indexPaths,
+        string? query,
+        int limit = 50)
+    {
+        ArgumentNullException.ThrowIfNull(indexPaths);
+
+        if (indexPaths.Count == 0 || limit <= 0)
+        {
+            return Array.Empty<SearchResult>();
+        }
+
+        if (indexPaths.Count == 1)
+        {
+            return Search(indexPaths[0], query, limit);
+        }
+
+        string[] terms = QueryParser.Parse(query);
+
+        if (terms.Length == 0)
+        {
+            var prefix = new List<SearchResult>(limit);
+
+            foreach (string indexPath in indexPaths)
+            {
+                prefix.AddRange(Search(indexPath, query, limit - prefix.Count));
+
+                if (prefix.Count == limit)
+                {
+                    break;
+                }
+            }
+
+            return prefix;
+        }
+
+        var merged = new List<SearchResult>(limit);
+
+        foreach (string indexPath in indexPaths)
+        {
+            foreach (SearchResult candidate in Search(indexPath, query, limit))
+            {
+                EntryScorer.Insert(merged, candidate.Score, candidate.Entry.Path, candidate.Entry.IsDirectory, limit);
+            }
+        }
+
+        EntryScorer.FillPositions(merged, terms);
+        return merged;
     }
 
     public static int Count(string indexPath)
@@ -60,7 +115,7 @@ public static class IndexSearchSource
     }
 
     private static List<SearchResult> ScanInParallel(
-        SafeFileHandle handle,
+        string indexPath,
         IndexHeader header,
         string[] terms,
         byte[][]? termBytes,
@@ -75,9 +130,17 @@ public static class IndexSearchSource
             long start = header.RecordsOffset + (worker * chunk);
             long end = Math.Min(header.RecordsOffset + header.RecordsLength, start + chunk);
 
-            parts[worker] = start >= end
-                ? new List<SearchResult>()
-                : ScanRange(handle, start, end, terms, termBytes, limit, alignStart: worker > 0);
+            if (start >= end)
+            {
+                parts[worker] = new List<SearchResult>();
+                return;
+            }
+
+            // Each worker opens its own handle. Reads on one synchronous handle
+            // are serialized by the file object, and opening the handle for
+            // overlapped I/O instead makes RandomAccess fault under NativeAOT.
+            using SafeFileHandle handle = IndexFile.OpenHandle(indexPath);
+            parts[worker] = ScanRange(handle, start, end, terms, termBytes, limit, alignStart: worker > 0);
         });
 
         var merged = new List<SearchResult>(limit);

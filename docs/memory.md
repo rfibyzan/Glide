@@ -56,4 +56,23 @@ measured. Budget for v0.2.0 and later: 50 MB idle. Raise it only with a recorded
 
 The 200k case is why the scan is capped. A path string on the managed heap costs
 about 390 bytes per real entry, so the cap is a budget decision, not a product
-decision; v0.4 replaces those strings with a compact memory-mapped store.
+decision.
+
+## Index, v0.4.0
+
+The same 100k entries, now behind an index file in `%ProgramData%\Glide`:
+
+| Case | Working set |
+|---|---:|
+| Window shown, 100k index, typing `report` | 18.4 MB |
+| Whole process, 1M index, 600 queries | 36.8 MB average, 39.2 MB peak |
+
+The launcher keeps no entries of its own. The 18.4 MB is the window, the fonts
+and brushes, and one 128 KB read buffer per worker; the strings are the 50 rows
+on screen. The 1M row is the same benchmark loop the latency numbers come from,
+which is the worst case: it never lets the process settle between queries.
+
+`scripts/ui-smoke.ps1 -AppArgs "--index artifacts\bench-100k.gidx"` is the run
+behind the first row, and it also asserts the window still shows, focuses, hides,
+and reopens with an index behind it.
+

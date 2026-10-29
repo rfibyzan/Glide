@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
+using Glide.App.Search;
 using Glide.App.Win32;
+using Glide.Core.Index;
 using Glide.Core.Search;
 using Glide.Core.Snapshot;
 
@@ -35,6 +37,7 @@ internal sealed class SearchWindow
 
     private readonly EntryStore? _snapshot;
     private readonly int _maxEntries;
+    private readonly string[] _indexPaths;
     private EntryStore? _store;
     private string _query = string.Empty;
     private SearchResult[] _results = [];
@@ -62,18 +65,24 @@ internal sealed class SearchWindow
     private int _backWidth;
     private int _backHeight;
 
-    private SearchWindow(EntryStore? snapshot, int maxEntries)
+    private SearchWindow(EntryStore? snapshot, string[] indexPaths, int maxEntries)
     {
         _snapshot = snapshot;
+        _indexPaths = indexPaths;
         _maxEntries = maxEntries;
     }
 
-    public static int Run(string? snapshotPath, string? scanRoot, bool showOnStart, int maxEntries)
+    public static int Run(
+        string? snapshotPath,
+        string? scanRoot,
+        string[] indexPaths,
+        bool showOnStart,
+        int maxEntries)
     {
         NativeMethods.SetProcessDpiAwarenessContext(NativeMethods.PerMonitorAwareV2);
 
         EntryStore? snapshot = snapshotPath is null ? null : EntryStore.FromFile(snapshotPath);
-        var window = new SearchWindow(snapshot, maxEntries);
+        var window = new SearchWindow(snapshot, indexPaths, maxEntries);
         s_instance = window;
 
         window.CreateNativeWindow();
@@ -185,6 +194,14 @@ internal sealed class SearchWindow
         if (_snapshot is not null)
         {
             _store = _snapshot;
+            Refresh();
+            return;
+        }
+
+        if (_indexPaths.Length > 0)
+        {
+            Console.Error.WriteLine($"Glide: searching {_indexPaths.Length} index file(s) in {IndexLocator.Directory}");
+            _scanRoot = Path.GetDirectoryName(_indexPaths[0]) ?? IndexLocator.Directory;
             Refresh();
             return;
         }
@@ -482,9 +499,18 @@ internal sealed class SearchWindow
     {
         EntryStore? store = Volatile.Read(ref _store);
 
-        _results = store is null
-            ? []
-            : store.Search(_query, VisibleRows).ToArray();
+        if (store is not null)
+        {
+            _results = store.Search(_query, VisibleRows).ToArray();
+        }
+        else if (_indexPaths.Length > 0)
+        {
+            _results = [.. IndexSearchSource.SearchMany(_indexPaths, _query, VisibleRows)];
+        }
+        else
+        {
+            _results = [];
+        }
 
         _selected = 0;
         NativeMethods.InvalidateRect(_hwnd, IntPtr.Zero, false);
@@ -638,7 +664,7 @@ internal sealed class SearchWindow
 
         int rowsTop = header + Scale(1);
 
-        if (_store is null)
+        if (_store is null && _indexPaths.Length == 0)
         {
             NativeMethods.SetTextColor(dc, Rgb(DimColor));
             string message = _indexing ? $"Indexing {_scanRoot}" : "Indexing";

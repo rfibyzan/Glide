@@ -93,18 +93,20 @@ cap is the honest v0.3 boundary until the compact store lands.
 the UTF-8 path, and a NUL terminator, so an entry costs 50 bytes for the
 synthetic 50-byte paths above. Building 1M entries takes 83 ms.
 
-Queries stream the file with `RandomAccess` over a file handle opened with
-`FILE_FLAG_OVERLAPPED`; without that flag the kernel serializes concurrent reads
-and 50 MB took 16 ms instead of 9 ms. Each of up to 8 workers holds a 128 KB
-buffer and keeps its own top list, merged with the shared comparator.
+Queries stream the file with `RandomAccess`, one handle per worker: reads on a
+single synchronous handle are serialized by the file object, and opening the
+handle for overlapped I/O instead made `RandomAccess` fault under NativeAOT.
+With one handle, 50 MB read in 16 ms; with one per worker, 9 ms. Each of up to 8
+workers holds a 128 KB buffer and keeps its own top list, merged with the shared
+comparator.
 
 | Query, 1M entries | p50 | p95 | p99 |
 |---|---:|---:|---:|
-| `report` | 18.5 ms | 21.8 ms | 23.5 ms |
-| `project1` | 22.5 ms | 25.7 ms | 27.7 ms |
-| `users documents` | 24.2 ms | 27.6 ms | 28.9 ms |
-| `zzzzzz` (no match) | 9.5 ms | 11.1 ms | 13.5 ms |
-| `report`, 100k entries | 3.5 ms | 4.3 ms | — |
+| `report` | 19.2 ms | 22.6 ms | 25.0 ms |
+| `project1` | 21.5 ms | 24.1 ms | 26.2 ms |
+| `users documents` | 22.7 ms | 25.8 ms | 27.4 ms |
+| `zzzzzz` (no match) | 9.8 ms | 10.8 ms | 11.3 ms |
+| `report`, 100k entries | 3.4 ms | 4.2 ms | — |
 
 Budget: p95 under 30 ms at 1M entries, under 10 ms at 100k. Numbers are the
 median p95 of five runs of 60 queries after 15 warmups.
