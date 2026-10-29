@@ -14,10 +14,11 @@ under 50 MB idle as a single native-AOT process.
 |---|---|---|
 | v0.1.0 | Search core: query parsing, fuzzy matching, ranking | done, 30 tests |
 | v0.1.1 | Native-AOT shell and memory gate | done, 8.3 MB p95 idle |
-| v0.2.0 | Window, global hotkey, search over a snapshot | planned |
-| v0.3.0 | NTFS USN index for whole drives | planned |
-| v0.4.0 | Actions, calculator, bookmarks, history | planned |
-| v0.5.0 | Quick switch in file dialogs | planned |
+| v0.2.0 | Snapshot store, latency and memory gates | done, 5.2 ms p95, 32.9 MB with 100k entries |
+| v0.3.0 | Window, global hotkey, folder scan | next |
+| v0.4.0 | NTFS USN index for whole drives | planned |
+| v0.5.0 | Actions, calculator, bookmarks, history | planned |
+| v0.6.0 | Quick switch in file dialogs | planned |
 
 Nothing in this repository runs as a Windows shell extension yet. The core is a
 plain library and can be exercised from tests.
@@ -40,6 +41,7 @@ NativeAOT, which needs the MSVC build tools on the machine that publishes.
 - Index stored in a memory-mapped file; entries are not kept on the heap.
 - Ranking is a pure function, documented in `docs/ranking.md`.
 - The memory baseline and the gate are documented in `docs/memory.md`.
+- Latency and memory measurements are recorded in `docs/performance.md`.
 
 ## Ranking in one paragraph
 

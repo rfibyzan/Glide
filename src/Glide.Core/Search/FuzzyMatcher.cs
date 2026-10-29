@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Glide.Core.Search;
 
 /// <summary>
@@ -38,12 +40,12 @@ public static class FuzzyMatcher
 
         for (int p = 0; p < pattern.Length; p++)
         {
-            char wanted = char.ToLowerInvariant(pattern[p]);
+            char wanted = Fold(pattern[p]);
             int found = -1;
 
             for (int c = searchFrom; c < candidate.Length; c++)
             {
-                if (char.ToLowerInvariant(candidate[c]) == wanted)
+                if (Fold(candidate[c]) == wanted)
                 {
                     found = c;
                     break;
@@ -110,12 +112,12 @@ public static class FuzzyMatcher
 
         for (int p = 0; p < pattern.Length; p++)
         {
-            char wanted = char.ToLowerInvariant(pattern[p]);
+            char wanted = Fold(pattern[p]);
             int found = -1;
 
             for (int c = searchFrom; c < candidate.Length; c++)
             {
-                if (char.ToLowerInvariant(candidate[c]) == wanted)
+                if (Fold(candidate[c]) == wanted)
                 {
                     found = c;
                     break;
@@ -148,5 +150,14 @@ public static class FuzzyMatcher
         }
 
         return char.IsUpper(candidate[index]) && char.IsLower(previous);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static char Fold(char value)
+    {
+        // Paths are dominated by lower-case ASCII, so skip the culture call.
+        return value is >= 'a' and <= 'z' or >= '0' and <= '9'
+            ? value
+            : char.ToLowerInvariant(value);
     }
 }

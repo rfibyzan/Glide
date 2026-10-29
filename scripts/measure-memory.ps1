@@ -1,5 +1,6 @@
 param(
     [string]$Exe = "artifacts\publish\glide.exe",
+    [string]$AppArgs = "",
     [int]$BudgetMB = 50,
     [int]$Seconds = 5,
     [int]$SampleMs = 200
@@ -11,7 +12,11 @@ if (-not (Test-Path $Exe)) {
     Write-Error "Executable not found: $Exe. Publish first: dotnet publish src\Glide.App -c Release -r win-x64 -o artifacts\publish"
 }
 
-$process = Start-Process -FilePath $Exe -ArgumentList "--idle", "$Seconds" -PassThru
+if ([string]::IsNullOrWhiteSpace($AppArgs)) {
+    $AppArgs = "--idle $Seconds"
+}
+
+$process = Start-Process -FilePath $Exe -ArgumentList $AppArgs -PassThru
 $samples = New-Object System.Collections.Generic.List[double]
 
 try {
@@ -29,19 +34,20 @@ finally {
 }
 
 if ($samples.Count -eq 0) {
-    Write-Error "No samples collected from $Exe"
+    Write-Error "Process exited before a sample was taken. Exit code: $($process.ExitCode)"
 }
 
 $sorted = $samples | Sort-Object
 $p95Index = [math]::Min($sorted.Count - 1, [math]::Ceiling($sorted.Count * 0.95) - 1)
 
 $result = [pscustomobject]@{
-    Exe      = $Exe
-    Samples  = $samples.Count
+    Exe       = $Exe
+    Args      = ($AppArgs -join " ")
+    Samples   = $samples.Count
     AverageMB = [math]::Round(($samples | Measure-Object -Average).Average, 1)
-    P95MB    = [math]::Round($sorted[$p95Index], 1)
-    MaxMB    = [math]::Round($sorted[-1], 1)
-    BudgetMB = $BudgetMB
+    P95MB     = [math]::Round($sorted[$p95Index], 1)
+    MaxMB     = [math]::Round($sorted[-1], 1)
+    BudgetMB  = $BudgetMB
 }
 
 $result | Format-List
