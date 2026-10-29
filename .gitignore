@@ -1,0 +1,21 @@
+## Build output
+bin/
+obj/
+artifacts/
+publish/
+
+## Test and coverage
+TestResults/
+*.trx
+coverage.*
+*.coverage
+
+## Visual Studio and Rider
+.vs/
+.idea/
+*.user
+*.suo
+
+## Local scratch
+*.log
+scratch/
