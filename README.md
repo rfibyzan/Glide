@@ -13,7 +13,7 @@ under 50 MB idle as a single native-AOT process.
 | Version | Scope | State |
 |---|---|---|
 | v0.1.0 | Search core: query parsing, fuzzy matching, ranking | done, 30 tests |
-| v0.1.1 | Memory gate harness | planned |
+| v0.1.1 | Native-AOT shell and memory gate | done, 8.3 MB p95 idle |
 | v0.2.0 | Window, global hotkey, search over a snapshot | planned |
 | v0.3.0 | NTFS USN index for whole drives | planned |
 | v0.4.0 | Actions, calculator, bookmarks, history | planned |
@@ -39,6 +39,7 @@ NativeAOT, which needs the MSVC build tools on the machine that publishes.
 - One low-level keyboard hook covers 32-bit and 64-bit applications.
 - Index stored in a memory-mapped file; entries are not kept on the heap.
 - Ranking is a pure function, documented in `docs/ranking.md`.
+- The memory baseline and the gate are documented in `docs/memory.md`.
 
 ## Ranking in one paragraph
 

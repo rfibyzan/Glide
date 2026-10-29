@@ -15,3 +15,13 @@ jobs:
           dotnet-version: 8.0.x
       - run: dotnet build Glide.sln -c Release
       - run: dotnet test Glide.sln -c Release --no-build
+
+  memory:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet publish src\Glide.App\Glide.App.csproj -c Release -r win-x64 -o artifacts\publish
+      - run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\measure-memory.ps1 -Exe artifacts\publish\glide.exe -Seconds 3 -BudgetMB 50

@@ -11,6 +11,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{BF779C30
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Glide.Core.Tests", "tests\Glide.Core.Tests\Glide.Core.Tests.csproj", "{2C629C04-E554-4484-8D5F-27A5210DC30D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Glide.App", "src\Glide.App\Glide.App.csproj", "{A5C206B1-829A-46BC-86A7-1EC4CF2CB752}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,9 +30,14 @@ Global
 		{2C629C04-E554-4484-8D5F-27A5210DC30D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2C629C04-E554-4484-8D5F-27A5210DC30D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2C629C04-E554-4484-8D5F-27A5210DC30D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A5C206B1-829A-46BC-86A7-1EC4CF2CB752}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A5C206B1-829A-46BC-86A7-1EC4CF2CB752}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A5C206B1-829A-46BC-86A7-1EC4CF2CB752}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A5C206B1-829A-46BC-86A7-1EC4CF2CB752}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{D64A0EA5-7C64-45EB-842E-4A64C81539F2} = {710E2D01-1B03-45F2-983A-C076B92A0BB6}
 		{2C629C04-E554-4484-8D5F-27A5210DC30D} = {BF779C30-58AD-4A99-AEAD-1C43A8C3AB5C}
+		{A5C206B1-829A-46BC-86A7-1EC4CF2CB752} = {710E2D01-1B03-45F2-983A-C076B92A0BB6}
 	EndGlobalSection
 EndGlobal
