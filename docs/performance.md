@@ -38,9 +38,9 @@ regression was found.
 | Budget | 50 MB |
 
 That is 1.9 MB of working set for runtime and strings per 10k entries, with the
-whole `FileEntry[]` and its path strings held on the heap. The USN index in
-v0.4.0 moves that data into a memory-mapped file so it no longer scales with the
-heap.
+whole `FileEntry[]` and its path strings held on the heap. The v0.4.0 index moves
+that data into a file that is streamed during a query, so memory no longer
+scales with the number of indexed entries.
 
 ## The window, v0.3.0
 
@@ -86,3 +86,47 @@ per entry does not fit the budget at full scale:
 
 The default cap is 75,000. Scanning 200,000 entries takes 7.6 s and 88 MB; the
 cap is the honest v0.3 boundary until the compact store lands.
+
+## The on-disk index, v0.4.0
+
+`--index-build` turns a snapshot into a `.gidx` file. A record is a flags byte,
+the UTF-8 path, and a NUL terminator, so an entry costs 50 bytes for the
+synthetic 50-byte paths above. Building 1M entries takes 83 ms.
+
+Queries stream the file with `RandomAccess` over a file handle opened with
+`FILE_FLAG_OVERLAPPED`; without that flag the kernel serializes concurrent reads
+and 50 MB took 16 ms instead of 9 ms. Each of up to 8 workers holds a 128 KB
+buffer and keeps its own top list, merged with the shared comparator.
+
+| Query, 1M entries | p50 | p95 | p99 |
+|---|---:|---:|---:|
+| `report` | 18.5 ms | 21.8 ms | 23.5 ms |
+| `project1` | 22.5 ms | 25.7 ms | 27.7 ms |
+| `users documents` | 24.2 ms | 27.6 ms | 28.9 ms |
+| `zzzzzz` (no match) | 9.5 ms | 11.1 ms | 13.5 ms |
+| `report`, 100k entries | 3.5 ms | 4.3 ms | — |
+
+Budget: p95 under 30 ms at 1M entries, under 10 ms at 100k. Numbers are the
+median p95 of five runs of 60 queries after 15 warmups.
+
+Three things took the 1M case from 38 ms to 22 ms:
+
+1. ASCII paths are scored as bytes, so a query never decodes a million strings;
+   only the 50 winners become strings.
+2. The index stores an ASCII bit per record. Before, every query ran an
+   `Ascii.IsValid` pass over every path just to choose a decoder.
+3. Scoring searches with vectorized `IndexOfAny` on the folded byte and its
+   uppercase twin instead of folding each byte in a scalar loop. The no-match
+   query fell from 22 ms to 10 ms, which is close to the 9 ms the file read alone
+   costs.
+
+The same rules rank both backends: `EntryScorer` holds the tier bonuses and the
+compare order, and the index tests assert that byte scoring, character scoring,
+and the in-memory engine produce identical results.
+
+## Memory while querying the index
+
+Streaming a 1M-entry index 600 times in one process: 36.8 MB average, 39.2 MB
+peak. The read buffers are pooled and reused; the top list holds at most 50
+paths.
+

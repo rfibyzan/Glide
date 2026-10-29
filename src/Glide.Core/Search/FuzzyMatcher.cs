@@ -92,6 +92,81 @@ public static class FuzzyMatcher
     }
 
     /// <summary>
+    /// Byte equivalent of <see cref="Score"/> for ASCII candidates. Paths on
+    /// Windows are almost always ASCII, and scoring them in place avoids
+    /// decoding a million strings per keystroke. Non-ASCII input must use the
+    /// char overload, which folds case correctly.
+    /// </summary>
+    public static int? ScoreBytes(ReadOnlySpan<byte> pattern, ReadOnlySpan<byte> candidate)
+    {
+        if (pattern.IsEmpty)
+        {
+            return 0;
+        }
+
+        if (candidate.IsEmpty || pattern.Length > candidate.Length)
+        {
+            return null;
+        }
+
+        int score = 0;
+        int searchFrom = 0;
+        int previous = -1;
+
+        for (int p = 0; p < pattern.Length; p++)
+        {
+            byte wanted = Fold(pattern[p]);
+            int found = -1;
+
+            if (searchFrom < candidate.Length)
+            {
+                int at = candidate[searchFrom..].IndexOfAny(wanted, Unfold(wanted));
+                if (at >= 0)
+                {
+                    found = searchFrom + at;
+                }
+            }
+
+            if (found < 0)
+            {
+                return null;
+            }
+
+            int gap = found - previous - 1;
+            if (gap > 0)
+            {
+                score -= Math.Min(gap, MaxPenalizedGap) * GapPenaltyPerCharacter;
+            }
+
+            score += PerCharacter;
+
+            if (previous >= 0 && found == previous + 1)
+            {
+                score += ConsecutiveBonus;
+            }
+            else if (IsWordStart(candidate, found))
+            {
+                score += WordStartBonus;
+            }
+
+            if (candidate[found] == pattern[p])
+            {
+                score += ExactCaseBonus;
+            }
+
+            previous = found;
+            searchFrom = found + 1;
+        }
+
+        if (previous == candidate.Length - 1)
+        {
+            score += TailBonus;
+        }
+
+        return score;
+    }
+
+    /// <summary>
     /// Character offsets of the match inside <paramref name="candidate"/>, or
     /// an empty array when there is no match. Used for highlighting.
     /// </summary>
@@ -150,6 +225,43 @@ public static class FuzzyMatcher
         }
 
         return char.IsUpper(candidate[index]) && char.IsLower(previous);
+    }
+
+    private static bool IsWordStart(ReadOnlySpan<byte> candidate, int index)
+    {
+        if (index == 0)
+        {
+            return true;
+        }
+
+        byte previous = candidate[index - 1];
+        if (!IsAsciiLetterOrDigit(previous))
+        {
+            return true;
+        }
+
+        return IsAsciiUpper(candidate[index]) && IsAsciiLower(previous);
+    }
+
+    private static bool IsAsciiLetterOrDigit(byte value)
+    {
+        return IsAsciiLower(value) || IsAsciiUpper(value) || (value >= (byte)'0' && value <= (byte)'9');
+    }
+
+    private static bool IsAsciiUpper(byte value) => value is >= (byte)'A' and <= (byte)'Z';
+
+    private static bool IsAsciiLower(byte value) => value is >= (byte)'a' and <= (byte)'z';
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static byte Fold(byte value)
+    {
+        return IsAsciiUpper(value) ? (byte)(value + 32) : value;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static byte Unfold(byte folded)
+    {
+        return folded is >= (byte)'a' and <= (byte)'z' ? (byte)(folded - 32) : folded;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

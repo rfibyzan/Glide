@@ -96,6 +96,37 @@ public class FuzzyMatcherTests
         Assert.Equal(first, second);
     }
 
+    public static TheoryData<string, string> AsciiPairs => new()
+    {
+        { "report", @"C:\Users\Asus\Documents\report-2024.md" },
+        { "re", @"C:\Users\Asus\Documents\report.md" },
+        { "rpt", @"reports\annual-report.txt" },
+        { "mw", "MainWindow.xaml" },
+        { "mw", "amxw" },
+        { "fp", "file-picker" },
+        { "FP", "File-Picker" },
+        { "a", @"D:\Projects\glide\src\Glide.Core\Search\SearchEngine.cs" },
+        { "search engine", @"D:\Projects\glide\src\Glide.Core\Search\SearchEngine.cs" },
+        { "project1", @"C:\Users\Asus\Documents\project1\report-000000.txt" },
+        { "000123", @"C:\Users\Asus\Documents\project1\report-000123.txt" },
+        { "zzz", @"C:\Users\Asus\Documents\report.md" },
+        { "notes.txt", @"C:\Users\Asus\notes.txt" },
+        { "0a", @"C:\a0\b" },
+        { "", @"C:\anything" },
+    };
+
+    [Theory]
+    [MemberData(nameof(AsciiPairs))]
+    public void BytesScoringMatchesCharScoringOnAscii(string pattern, string candidate)
+    {
+        int? chars = FuzzyMatcher.Score(pattern, candidate);
+        int? bytes = FuzzyMatcher.ScoreBytes(
+            System.Text.Encoding.ASCII.GetBytes(pattern),
+            System.Text.Encoding.ASCII.GetBytes(candidate));
+
+        Assert.Equal(chars, bytes);
+    }
+
     [Fact]
     public void MatchPositionsFollowTheCandidate()
     {
