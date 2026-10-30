@@ -93,7 +93,8 @@ them is already kept per volume.
 ## What it costs
 
 - Index file: 50 bytes per entry, so 50 MB for a million entries.
-- Launcher: 18.4 MB working set with a 100k index loaded and 50 rows on screen.
+- Launcher: 18.4 MB working set with a 100k index loaded and 50 rows on screen;
+  19.5 MB in v0.5.0 with themes and settings loaded.
 - Service: the enumeration holds one dictionary of records while it builds, which
   is the peak; between rebuilds it only polls the journal.
 

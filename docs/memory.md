@@ -76,3 +76,18 @@ which is the worst case: it never lets the process settle between queries.
 behind the first row, and it also asserts the window still shows, focuses, hides,
 and reopens with an index behind it.
 
+## Settings, themes, v0.5.0
+
+Same 100k index, dark theme, published binary, after the settings load, the
+hotkey registration, and the cached bookmark/history stores were added:
+
+| Case | Working set |
+|---|---:|
+| Window shown, 100k index, dark theme | 19.5 MB |
+| Window shown, 100k index, light theme | 19.5 MB |
+| Hidden with the hotkey notice painted | 19.6 MB |
+
+That is +1.1 MB over v0.4.0: two color sets' brushes and fonts, the parsed
+settings object, and at most 100 cached path strings from the two stores. Both
+themes stay 30 MB under the budget.
+

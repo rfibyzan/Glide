@@ -52,9 +52,9 @@ The same 100k snapshot, this time inside the launcher:
 | Visible, painting, results shown | 38.5 MB |
 | Folder scan of a small tree (`D:\Glide`) | 14.3 MB |
 
-`scripts/ui-smoke.ps1` drives the published binary: it presses Ctrl+Alt+Space,
-checks the window takes focus, posts keystrokes, screenshots the result, revokes
-focus and checks the window hides, then reopens and closes it with Escape.
+`scripts/ui-smoke.ps1` drives the published binary: it presses the configured
+shortcut, checks the window takes focus, posts keystrokes, screenshots the result,
+revokes focus and checks the window hides, then reopens and closes it with Escape.
 
 Two bugs that only a real desktop could show up:
 
@@ -131,4 +131,32 @@ and the in-memory engine produce identical results.
 Streaming a 1M-entry index 600 times in one process: 36.8 MB average, 39.2 MB
 peak. The read buffers are pooled and reused; the top list holds at most 50
 paths.
+
+## The window, v0.5.0
+
+`scripts/ui-smoke.ps1` now presses the shortcut from `-Hotkey` instead of a
+hardcoded `Ctrl+Alt+Space`, waits 800 ms after the window appears so the first
+press cannot race `RegisterHotKey`, and captures stderr when a check fails. Runs:
+
+| Case | Result |
+|---|---|
+| 100k index, `--theme dark`, `Ctrl+Shift+Alt+F9` | 6/6, 19.5 MB, `artifacts/ui-dark.png` |
+| 100k index, `--theme light`, `Ctrl+Shift+Alt+F9` | 6/6, 19.5 MB, `artifacts/ui-light.png` |
+
+A third run starts with the default shortcut and no `--hotkey`. On this machine
+`Ctrl+Shift+Alt+/` is already owned by Listary (probe: `RegisterHotKey` returns
+Win32 1409), so Glide falls back to `Ctrl+Alt+Space` and paints a teal notice row
+above the results instead of opening a modal dialog that blocks its message
+loop. `artifacts/ui-notice.png` is that state.
+
+Three real-desktop bugs came out of this round:
+
+1. The window exists before `RegisterHotKey` runs, so the smoke script's first
+   synthetic press could land before the registration and do nothing. The script
+   now waits 800 ms after it finds the window.
+2. With the fallback notice painted, the 400 ms foreground recheck could hide the
+   window before the user read it. The recheck is skipped while a notice is set,
+   so the fallback stays on screen until the user dismisses it.
+3. The notice was painted at the same offset as the first result row, so it
+   covered a row. It has its own row now, and mouse hit-testing subtracts it.
 

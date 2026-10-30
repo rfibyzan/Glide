@@ -17,7 +17,7 @@ under 50 MB idle as a single native-AOT process.
 | v0.2.0 | Snapshot store, latency and memory gates | done, 5.2 ms p95, 32.9 MB with 100k entries |
 | v0.3.0 | Window, global hotkey, folder scan | done, 38.5 MB with 100k entries shown, UI smoke green |
 | v0.4.0 | NTFS USN index for whole drives | done, 18.4 MB with a 100k index, 19 ms p50 at 1M |
-| v0.5.0 | Actions, calculator, bookmarks, history | planned |
+| v0.5.0 | Dark mode, configurable hotkey, actions, calculator, bookmarks, history | done, 19.5 MB with a 100k index, UI smoke 6/6 in both themes |
 | v0.6.0 | Quick switch in file dialogs | planned |
 
 One window, one hotkey, real search. Typing filters the loaded entries, arrow
@@ -36,14 +36,66 @@ it a few seconds after the journal moves. The launcher streams the file during a
 query: it decodes only the 50 rows that survive, so memory no longer grows with
 the number of indexed files. See `docs/index.md`.
 
+### Keys
+
+| Key | Action |
+|---|---|
+| `Enter` | open the selected result |
+| `Ctrl+Enter` | open its containing folder |
+| `Shift+Enter` or `Ctrl+C` | copy its full path |
+| `F2`, the context-menu key, or right click | actions menu: open, open folder, copy path, bookmark, properties |
+| `Up` / `Down` | move the selection |
+| `Escape` | hide the window |
+| `Ctrl+V` | paste a path into the query |
+
+### Calculator
+
+A query that starts with a digit, `-`, `(` or `=` is evaluated as arithmetic:
+`2+3*4` shows `14` as the first row, and Enter copies it. The parser is a small
+recursive-descent routine in `src/Glide.Core/Calculator.cs`; no scripting engine
+and no `DataTable.Compute`.
+
+### Bookmarks and history
+
+Bookmarked paths are matched ahead of file results and labelled `Bookmark`. Add
+or remove one from the actions menu. Opened paths land in history (50 entries,
+most recent first) and are offered when the query is empty. Both files live next
+to the settings, in `%APPDATA%\Glide`.
+
+## Settings
+
+`%APPDATA%\Glide\settings.json` is written with the defaults on first run:
+
+```json
+{
+  "hotkey": { "modifiers": ["Ctrl", "Shift", "Alt"], "key": "/" },
+  "theme": "system",
+  "maxResults": 8
+}
+```
+
+- `theme` is `system`, `dark` or `light`; `system` follows `AppsUseLightTheme`
+  and re-reads it on `WM_SETTINGCHANGE`.
+- `maxResults` is the number of rows drawn, clamped to 1–8. It no longer doubles
+  as the scan cap; that is `--max-entries`.
+- `hotkey` is modifiers plus a key character, so `/` resolves to the right
+  virtual-key code for the layout.
+- If the shortcut is already claimed by another application, Glide keeps running
+  on `Ctrl+Alt+Space` and paints a one-line notice in the window instead of
+  failing silently.
+- A missing or malformed file is logged to stderr and replaced by the defaults;
+  it never blocks startup.
+
 Nothing in this repository runs as a Windows shell extension yet. The core is a
 plain library and can be exercised from tests.
 
 ## Usage
 
 ```
-glide                            run the launcher (Ctrl+Alt+Space toggles it)
+glide                            run the launcher (Ctrl+Shift+Alt+/ by default)
 glide --show                     open the window, starting the app if needed
+glide --hotkey <spec>            override the shortcut, e.g. Ctrl+Shift+Alt+/
+glide --theme <system|dark|light> override the theme for this run
 glide --index <path>             search index files from the service (file or folder)
 glide --no-index                 ignore index files and scan the profile instead
 glide --scan <folder>            index a folder instead of the user profile
@@ -77,8 +129,13 @@ dotnet build Glide.sln
 dotnet test Glide.sln
 dotnet publish src\Glide.App\Glide.App.csproj -c Release -r win-x64 -o artifacts\publish
 dotnet publish src\Glide.Service\Glide.Service.csproj -c Release -r win-x64 -o artifacts\publish\service
-powershell -File scripts\ui-smoke.ps1
+powershell -File scripts\ui-smoke.ps1 -AppArgs "--index artifacts\bench-100k.gidx --hotkey Ctrl+Shift+Alt+F9 --theme dark" -Hotkey "Ctrl+Shift+Alt+F9"
 ```
+
+`ui-smoke.ps1` presses the shortcut in `-Hotkey`, so it must match whatever the
+app was started with. Pick a combination that is free on the machine; the script
+waits 800 ms after the window appears so the first press does not race
+`RegisterHotKey`.
 
 Requires the .NET 8 SDK. NativeAOT publishing needs the MSVC build tools on the
 machine that publishes.
@@ -87,7 +144,10 @@ machine that publishes.
 
 - Single 64-bit process. No WPF, no WebView2, no gRPC, no telemetry.
 - One popup window custom-drawn with Win32 and GDI, one UI thread, no child controls.
-- One global hotkey (Ctrl+Alt+Space) registered with `RegisterHotKey`; no keyboard hook.
+  Dark and light are two color sets over the same paint code; no control restyle.
+- One global hotkey, `Ctrl+Shift+Alt+/` by default, registered with
+  `RegisterHotKey`; no keyboard hook. It is read from `settings.json` and can be
+  overridden per run with `--hotkey`.
 - The index is a file that is streamed per query, not a heap graph; a million
   entries occupy 50 MB on disk and none of the launcher's heap.
 - Ranking is a pure function, documented in `docs/ranking.md`.
