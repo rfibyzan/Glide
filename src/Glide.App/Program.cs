@@ -5,6 +5,7 @@ using Glide.App.Search;
 using Glide.App.Ui;
 using Glide.Core.Index;
 using Glide.Core.Snapshot;
+using Glide.Core.Settings;
 using Microsoft.Win32.SafeHandles;
 
 namespace Glide.App;
@@ -65,6 +66,8 @@ internal static class Program
 
     private static int RunUi(string[] args)
     {
+        AppSettings settings = SettingsManager.LoadOrCreate();
+
         using var mutex = new Mutex(initiallyOwned: true, InstanceMutexName, out bool isFirstInstance);
 
         if (!isFirstInstance)
@@ -73,12 +76,21 @@ internal static class Program
             return 0;
         }
 
+        if (GetValue(args, "--theme") is string theme)
+        {
+            settings.Theme = theme;
+        }
+
+        int maxEntries = GetInteger(args, "--max-entries", 75_000);
+
         return SearchWindow.Run(
             GetValue(args, "--snapshot"),
             GetValue(args, "--scan"),
             ResolveIndexPaths(args),
             HasFlag(args, "--show"),
-            GetInteger(args, "--max-entries", 75_000));
+            maxEntries,
+            settings,
+            GetValue(args, "--hotkey"));
     }
 
     /// <summary>
@@ -372,9 +384,11 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.WriteLine("  glide 0.4.0");
-        Console.WriteLine("  glide                          run the launcher (Ctrl+Alt+Space)");
+        Console.WriteLine("  glide 0.5.0");
+        Console.WriteLine("  glide                          run the launcher (Ctrl+Shift+Alt+/ by default)");
         Console.WriteLine("  glide --show                   open the window, starting the app if needed");
+        Console.WriteLine("  glide --hotkey <spec>          override the shortcut, e.g. Ctrl+Shift+Alt+/");
+        Console.WriteLine("  glide --theme <system|dark|light>");
         Console.WriteLine("  glide --scan <folder>          index a folder instead of the user profile");
         Console.WriteLine("  glide --index <path>           search index files from the service (file or folder)");
         Console.WriteLine("  glide --no-index               ignore index files and scan the profile");

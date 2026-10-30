@@ -208,7 +208,7 @@ public sealed partial class UsnVolume : IDisposable
         uint flagsAndAttributes,
         nint templateFile);
 
-    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [LibraryImport("kernel32.dll", EntryPoint = "DeviceIoControl", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static unsafe partial bool DeviceIoControlNative(
         SafeFileHandle device,

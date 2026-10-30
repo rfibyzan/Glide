@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    <Version>0.3.0</Version>
+    <Version>0.5.0</Version>
     <Authors>Rafi Byzan</Authors>
     <RepositoryUrl>https://github.com/rfibyzan/Glide</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

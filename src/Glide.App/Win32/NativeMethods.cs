@@ -2,64 +2,169 @@ using System.Runtime.InteropServices;
 
 namespace Glide.App.Win32;
 
-internal static class NativeMethods
+public static class NativeMethods
 {
-    internal const int WsPopup = unchecked((int)0x80000000);
-    internal const int WsExTopmost = 0x00000008;
-    internal const int CsDropShadow = 0x00020000;
+    public const int WsPopup = unchecked((int)0x80000000);
+    public const int WsExTopmost = 0x00000008;
+    public const int CsDropShadow = 0x00020000;
 
-    internal const int SwHide = 0;
-    internal const int SwShow = 5;
+    public const int SwHide = 0;
+    public const int SwShow = 5;
 
-    internal const uint WmDestroy = 0x0002;
-    internal const uint WmSize = 0x0005;
-    internal const uint WmActivate = 0x0006;
-    internal const uint WmPaint = 0x000F;
-    internal const uint WmEraseBkgnd = 0x0014;
-    internal const uint WmKeyDown = 0x0100;
-    internal const uint WmChar = 0x0102;
-    internal const uint WmLButtonDown = 0x0201;
-    internal const uint WmLButtonDblClk = 0x0203;
-    internal const uint WmHotkey = 0x0312;
-    internal const uint WmTimer = 0x0113;
-    internal const uint WmApp = 0x8000;
+    public const uint WmDestroy = 0x0002;
+    public const uint WmSize = 0x0005;
+    public const uint WmActivate = 0x0006;
+    public const uint WmPaint = 0x000F;
+    public const uint WmEraseBkgnd = 0x0014;
+    public const uint WmKeyDown = 0x0100;
+    public const uint WmChar = 0x0102;
+    public const uint WmLButtonDown = 0x0201;
+    public const uint WmLButtonDblClk = 0x0203;
+    public const uint WmHotkey = 0x0312;
+    public const uint WmTimer = 0x0113;
+    public const uint WmApp = 0x8000;
 
-    internal const int VkBack = 0x08;
-    internal const int VkReturn = 0x0D;
-    internal const int VkEscape = 0x1B;
-    internal const int VkUp = 0x26;
-    internal const int VkDown = 0x28;
-    internal const int VkControl = 0x11;
-    internal const int VkV = 0x56;
-    internal const int VkA = 0x41;
+    public const int VkBack = 0x08;
+    public const int VkTab = 0x09;
+    public const int VkReturn = 0x0D;
+    public const int VkEscape = 0x1B;
+    public const int VkSpace = 0x20;
+    public const int VkPrior = 0x21; // Page Up
+    public const int VkNext = 0x22;  // Page Down
+    public const int VkEnd = 0x23;
+    public const int VkHome = 0x24;
+    public const int VkLeft = 0x25;
+    public const int VkUp = 0x26;
+    public const int VkRight = 0x27;
+    public const int VkDown = 0x28;
+    public const int VkInsert = 0x2D;
+    public const int VkDelete = 0x2E;
+    public const int VkControl = 0x11;
+    public const int VkShift = 0x10;
+    public const int VkMenu = 0x12; // Alt
+    public const int VkV = 0x56;
+    public const int VkA = 0x41;
+    public const int VkC = 0x43;
+    public const int VkF1 = 0x70;
+    public const int VkF2 = 0x71;
+    public const int VkF3 = 0x72;
+    public const int VkF4 = 0x73;
+    public const int VkF5 = 0x74;
+    public const int VkF6 = 0x75;
+    public const int VkF7 = 0x76;
+    public const int VkF8 = 0x77;
+    public const int VkF9 = 0x78;
+    public const int VkF10 = 0x79;
+    public const int VkF11 = 0x7A;
+    public const int VkF12 = 0x7B;
+    public const int VkApps = 0x5D; // Context Menu key
 
-    internal const uint ModAlt = 0x0001;
-    internal const uint ModControl = 0x0002;
+    public const int VkNumpad0 = 0x60;
+    public const int VkNumpad1 = 0x61;
+    public const int VkNumpad2 = 0x62;
+    public const int VkNumpad3 = 0x63;
+    public const int VkNumpad4 = 0x64;
+    public const int VkNumpad5 = 0x65;
+    public const int VkNumpad6 = 0x66;
+    public const int VkNumpad7 = 0x67;
+    public const int VkNumpad8 = 0x68;
+    public const int VkNumpad9 = 0x69;
+    public const int VkMultiply = 0x6A;
+    public const int VkAdd = 0x6B;
+    public const int VkSeparator = 0x6C;
+    public const int VkSubtract = 0x6D;
+    public const int VkDecimal = 0x6E;
+    public const int VkDivide = 0x6F;
 
-    internal const int Transparent = 1;
-    internal const uint DtLeft = 0x0000;
-    internal const uint DtVCenter = 0x0004;
-    internal const uint DtSingleLine = 0x0020;
-    internal const uint DtNoPrefix = 0x0800;
-    internal const uint DtEndEllipsis = 0x8000;
+    public const int VkOem1 = 0xBA;     // ;:
+    public const int VkOemPlus = 0xBB;  // =+
+    public const int VkOemComma = 0xBC; // ,<
+    public const int VkOemMinus = 0xBD; // -_
+    public const int VkOemPeriod = 0xBE;// .>
+    public const int VkOem2 = 0xBF;     // /?
+    public const int VkOem3 = 0xC0;     // `~
+    public const int VkOem4 = 0xDB;     // [{
+    public const int VkOem5 = 0xDC;     // \|
+    public const int VkOem6 = 0xDD;     // ]}
+    public const int VkOem7 = 0xDE;     // '"
 
-    internal const int FwNormal = 400;
-    internal const int FwSemiBold = 600;
+    public const uint ModAlt = 0x0001;
+    public const uint ModControl = 0x0002;
+    public const uint ModShift = 0x0004;
+    public const uint ModWin = 0x0008;
 
-    internal const int SwpNoZOrder = 0x0004;
-    internal const int SwpShowWindow = 0x0040;
+    public const int Transparent = 1;
+    public const uint DtLeft = 0x0000;
+    public const uint DtVCenter = 0x0004;
+    public const uint DtSingleLine = 0x0020;
+    public const uint DtNoPrefix = 0x0800;
+    public const uint DtEndEllipsis = 0x8000;
 
-    internal static readonly IntPtr HwndTopmost = new(-1);
-    internal static readonly IntPtr PerMonitorAwareV2 = new(-4);
+    public const int FwNormal = 400;
+    public const int FwSemiBold = 600;
 
-    internal const int IdcArrow = 32512;
-    internal const uint CfUnicodeText = 13;
-    internal const uint GmemMoveable = 0x0002;
-    internal const uint Srccopy = 0x00CC0020;
-    internal const uint MonitorDefaultToNearest = 2;
+    public const int SwpNoZOrder = 0x0004;
+    public const int SwpShowWindow = 0x0040;
+
+    public static readonly IntPtr HwndTopmost = new(-1);
+    public static readonly IntPtr PerMonitorAwareV2 = new(-4);
+
+    public const int IdcArrow = 32512;
+    public const uint CfUnicodeText = 13;
+    public const uint GmemMoveable = 0x0002;
+    public const uint Srccopy = 0x00CC0020;
+    public const uint MonitorDefaultToNearest = 2;
+
+    public const uint WmRButtonUp = 0x0205;
+    public const uint WmLButtonUp = 0x0202;
+
+    // Menu constants
+    public const uint MfString = 0x00000000;
+    public const uint MfSeparator = 0x00000800;
+    public const uint MfChecked = 0x00000008;
+    public const uint MfUnchecked = 0x00000000;
+    public const uint MfPopup = 0x00000010;
+    public const uint MfRightJustify = 0x00004000;
+
+    public const uint TpmLeftButton = 0x0000;
+    public const uint TpmRightButton = 0x0002;
+    public const uint TpmLeftAlign = 0x0000;
+    public const uint TpmCenterAlign = 0x0004;
+    public const uint TpmRightAlign = 0x0008;
+    public const uint TpmTopAlign = 0x0000;
+    public const uint TpmVcenterAlign = 0x0010;
+    public const uint TpmBottomAlign = 0x0020;
+    public const uint TpmHorizontal = 0x0000;
+    public const uint TpmVertical = 0x0040;
+    public const uint TpmNonotify = 0x0080;
+    public const uint TpmRetcmd = 0x0100;
+
+    [DllImport("user32.dll")]
+    public static extern bool EmptyClipboard();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr CreatePopupMenu();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern bool AppendMenuW(IntPtr hMenu, uint uFlags, UIntPtr uIDNewItem, string? lpNewItem);
+
+    [DllImport("user32.dll")]
+    public static extern bool DestroyMenu(IntPtr hMenu);
+
+    [DllImport("user32.dll")]
+    public static extern int TrackPopupMenuEx(IntPtr hMenu, uint uFlags, int x, int y, IntPtr hWnd, IntPtr lptpm);
+
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr GlobalAlloc(uint uFlags, uint dwBytes);
+
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr GlobalFree(IntPtr hMem);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr SetClipboardData(uint uFormat, IntPtr hMem);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    internal struct WndClassEx
+    public struct WndClassEx
     {
         public uint Size;
         public uint Style;
@@ -76,7 +181,7 @@ internal static class NativeMethods
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct Msg
+    public struct Msg
     {
         public IntPtr Hwnd;
         public uint Message;
@@ -88,19 +193,19 @@ internal static class NativeMethods
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct Rect
+    public struct Rect
     {
         public int Left;
         public int Top;
         public int Right;
         public int Bottom;
 
-        public readonly int Width => Right - Left;
-        public readonly int Height => Bottom - Top;
+        public int Width => Right - Left;
+        public int Height => Bottom - Top;
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct PaintStruct
+    public struct PaintStruct
     {
         public IntPtr Hdc;
         public int Erase;
@@ -114,21 +219,21 @@ internal static class NativeMethods
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct Point
+    public struct Point
     {
         public int X;
         public int Y;
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct Size
+    public struct Size
     {
         public int Cx;
         public int Cy;
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct MonitorInfo
+    public struct MonitorInfo
     {
         public int Size;
         public Rect Monitor;
@@ -136,13 +241,13 @@ internal static class NativeMethods
         public uint Flags;
     }
 
-    internal delegate IntPtr WndProc(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
+    public delegate IntPtr WndProc(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    internal static extern ushort RegisterClassExW(ref WndClassEx windowClass);
+    public static extern ushort RegisterClassExW(ref WndClassEx windowClass);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    internal static extern IntPtr CreateWindowExW(
+    public static extern IntPtr CreateWindowExW(
         int exStyle,
         string className,
         string windowName,
@@ -157,82 +262,82 @@ internal static class NativeMethods
         IntPtr param);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    internal static extern IntPtr DefWindowProcW(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
+    public static extern IntPtr DefWindowProcW(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll")]
-    internal static extern bool ShowWindow(IntPtr hWnd, int command);
+    public static extern bool ShowWindow(IntPtr hWnd, int command);
 
     [DllImport("user32.dll")]
-    internal static extern bool SetForegroundWindow(IntPtr hWnd);
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
 
     [DllImport("user32.dll")]
-    internal static extern UIntPtr SetTimer(IntPtr hWnd, UIntPtr id, uint elapse, IntPtr timerProc);
+    public static extern UIntPtr SetTimer(IntPtr hWnd, UIntPtr id, uint elapse, IntPtr timerProc);
 
     [DllImport("user32.dll")]
-    internal static extern bool KillTimer(IntPtr hWnd, UIntPtr id);
+    public static extern bool KillTimer(IntPtr hWnd, UIntPtr id);
 
     [DllImport("user32.dll")]
-    internal static extern IntPtr GetForegroundWindow();
+    public static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
-    internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
     [DllImport("kernel32.dll")]
-    internal static extern uint GetCurrentThreadId();
+    public static extern uint GetCurrentThreadId();
 
     [DllImport("user32.dll")]
-    internal static extern bool AttachThreadInput(uint attach, uint attachTo, bool doAttach);
+    public static extern bool AttachThreadInput(uint attach, uint attachTo, bool doAttach);
 
     [DllImport("user32.dll")]
-    internal static extern bool BringWindowToTop(IntPtr hWnd);
+    public static extern bool BringWindowToTop(IntPtr hWnd);
 
     [DllImport("user32.dll")]
-    internal static extern IntPtr SetFocus(IntPtr hWnd);
+    public static extern IntPtr SetFocus(IntPtr hWnd);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    internal static extern int GetMessageW(out Msg message, IntPtr hWnd, uint filterMin, uint filterMax);
+    public static extern int GetMessageW(out Msg message, IntPtr hWnd, uint filterMin, uint filterMax);
 
     [DllImport("user32.dll")]
-    internal static extern bool TranslateMessage(ref Msg message);
+    public static extern bool TranslateMessage(ref Msg message);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    internal static extern IntPtr DispatchMessageW(ref Msg message);
+    public static extern IntPtr DispatchMessageW(ref Msg message);
 
     [DllImport("user32.dll")]
-    internal static extern void PostQuitMessage(int exitCode);
+    public static extern void PostQuitMessage(int exitCode);
 
     [DllImport("user32.dll", SetLastError = true)]
-    internal static extern bool RegisterHotKey(IntPtr hWnd, int id, uint modifiers, uint virtualKey);
+    public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint modifiers, uint virtualKey);
 
     [DllImport("user32.dll")]
-    internal static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+    public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    internal static extern IntPtr LoadCursorW(IntPtr instance, IntPtr cursorName);
+    public static extern IntPtr LoadCursorW(IntPtr instance, IntPtr cursorName);
 
     [DllImport("user32.dll")]
-    internal static extern IntPtr BeginPaint(IntPtr hWnd, out PaintStruct paint);
+    public static extern IntPtr BeginPaint(IntPtr hWnd, out PaintStruct paint);
 
     [DllImport("user32.dll")]
-    internal static extern bool EndPaint(IntPtr hWnd, ref PaintStruct paint);
+    public static extern bool EndPaint(IntPtr hWnd, ref PaintStruct paint);
 
     [DllImport("user32.dll")]
-    internal static extern bool GetClientRect(IntPtr hWnd, out Rect rect);
+    public static extern bool GetClientRect(IntPtr hWnd, out Rect rect);
 
     [DllImport("user32.dll")]
-    internal static extern bool InvalidateRect(IntPtr hWnd, IntPtr rect, bool erase);
+    public static extern bool InvalidateRect(IntPtr hWnd, IntPtr rect, bool erase);
 
     [DllImport("user32.dll")]
-    internal static extern bool GetCursorPos(out Point point);
+    public static extern bool GetCursorPos(out Point point);
 
     [DllImport("user32.dll")]
-    internal static extern IntPtr MonitorFromPoint(Point point, uint flags);
+    public static extern IntPtr MonitorFromPoint(Point point, uint flags);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    internal static extern bool GetMonitorInfoW(IntPtr monitor, ref MonitorInfo info);
+    public static extern bool GetMonitorInfoW(IntPtr monitor, ref MonitorInfo info);
 
     [DllImport("user32.dll", SetLastError = true)]
-    internal static extern bool SetWindowPos(
+    public static extern bool SetWindowPos(
         IntPtr hWnd,
         IntPtr insertAfter,
         int x,
@@ -242,31 +347,31 @@ internal static class NativeMethods
         int flags);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    internal static extern IntPtr FindWindowW(string? className, string? windowName);
+    public static extern IntPtr FindWindowW(string? className, string? windowName);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    internal static extern IntPtr SendMessageW(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
+    public static extern IntPtr SendMessageW(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    internal static extern bool PostMessageW(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
+    public static extern bool PostMessageW(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll")]
-    internal static extern short GetKeyState(int virtualKey);
+    public static extern short GetKeyState(int virtualKey);
 
     [DllImport("user32.dll")]
-    internal static extern bool OpenClipboard(IntPtr owner);
+    public static extern bool OpenClipboard(IntPtr owner);
 
     [DllImport("user32.dll")]
-    internal static extern bool CloseClipboard();
+    public static extern bool CloseClipboard();
 
     [DllImport("user32.dll")]
-    internal static extern IntPtr GetClipboardData(uint format);
+    public static extern IntPtr GetClipboardData(uint format);
 
     [DllImport("user32.dll")]
-    internal static extern bool IsClipboardFormatAvailable(uint format);
+    public static extern bool IsClipboardFormatAvailable(uint format);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    internal static extern IntPtr ShellExecuteW(
+    public static extern IntPtr ShellExecuteW(
         IntPtr hWnd,
         string operation,
         string file,
@@ -275,40 +380,40 @@ internal static class NativeMethods
         int showCommand);
 
     [DllImport("user32.dll")]
-    internal static extern uint GetDpiForWindow(IntPtr hWnd);
+    public static extern uint GetDpiForWindow(IntPtr hWnd);
 
     [DllImport("user32.dll")]
-    internal static extern bool SetProcessDpiAwarenessContext(IntPtr context);
+    public static extern bool SetProcessDpiAwarenessContext(IntPtr context);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
-    internal static extern IntPtr GetModuleHandleW(string? moduleName);
+    public static extern IntPtr GetModuleHandleW(string? moduleName);
 
     [DllImport("kernel32.dll")]
-    internal static extern IntPtr GlobalLock(IntPtr handle);
+    public static extern IntPtr GlobalLock(IntPtr handle);
 
     [DllImport("kernel32.dll")]
-    internal static extern bool GlobalUnlock(IntPtr handle);
+    public static extern bool GlobalUnlock(IntPtr handle);
 
     [DllImport("gdi32.dll")]
-    internal static extern IntPtr CreateSolidBrush(int color);
+    public static extern IntPtr CreateSolidBrush(int color);
 
     [DllImport("gdi32.dll")]
-    internal static extern bool DeleteObject(IntPtr handle);
+    public static extern bool DeleteObject(IntPtr handle);
 
     [DllImport("gdi32.dll")]
-    internal static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+    public static extern IntPtr CreateCompatibleDC(IntPtr hdc);
 
     [DllImport("gdi32.dll")]
-    internal static extern IntPtr CreateCompatibleBitmap(IntPtr hdc, int width, int height);
+    public static extern IntPtr CreateCompatibleBitmap(IntPtr hdc, int width, int height);
 
     [DllImport("gdi32.dll")]
-    internal static extern IntPtr SelectObject(IntPtr hdc, IntPtr handle);
+    public static extern IntPtr SelectObject(IntPtr hdc, IntPtr handle);
 
     [DllImport("gdi32.dll")]
-    internal static extern bool DeleteDC(IntPtr hdc);
+    public static extern bool DeleteDC(IntPtr hdc);
 
     [DllImport("gdi32.dll")]
-    internal static extern bool BitBlt(
+    public static extern bool BitBlt(
         IntPtr destination,
         int x,
         int y,
@@ -320,16 +425,16 @@ internal static class NativeMethods
         uint operation);
 
     [DllImport("user32.dll")]
-    internal static extern int FillRect(IntPtr hdc, ref Rect rect, IntPtr brush);
+    public static extern int FillRect(IntPtr hdc, ref Rect rect, IntPtr brush);
 
     [DllImport("gdi32.dll")]
-    internal static extern int SetBkMode(IntPtr hdc, int mode);
+    public static extern int SetBkMode(IntPtr hdc, int mode);
 
     [DllImport("gdi32.dll")]
-    internal static extern int SetTextColor(IntPtr hdc, int color);
+    public static extern int SetTextColor(IntPtr hdc, int color);
 
     [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
-    internal static extern IntPtr CreateFontW(
+    public static extern IntPtr CreateFontW(
         int height,
         int width,
         int escapement,
@@ -346,12 +451,12 @@ internal static class NativeMethods
         string faceName);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    internal static extern int DrawTextW(IntPtr hdc, string text, int length, ref Rect rect, uint format);
+    public static extern int DrawTextW(IntPtr hdc, string text, int length, ref Rect rect, uint format);
 
     [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
-    internal static extern bool GetTextExtentPoint32W(IntPtr hdc, string text, int length, out Size size);
+    public static extern bool GetTextExtentPoint32W(IntPtr hdc, string text, int length, out Size size);
 
-    internal static int Rgb(int red, int green, int blue)
+    public static int Rgb(int red, int green, int blue)
     {
         return red | (green << 8) | (blue << 16);
     }
