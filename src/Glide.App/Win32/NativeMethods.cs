@@ -370,7 +370,7 @@ public static class NativeMethods
     [DllImport("user32.dll")]
     public static extern bool IsClipboardFormatAvailable(uint format);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr ShellExecuteW(
         IntPtr hWnd,
         string operation,
