@@ -178,4 +178,21 @@ public sealed class IndexTests : IDisposable
             File.Delete(second + ".tmp");
         }
     }
+
+    [Fact]
+    public void StreamsCombinedPathsViaIndexStreamWriter()
+    {
+        using (var writer = new IndexStreamWriter(_path))
+        {
+            writer.Write(@"C:\Users\Asus", isDirectory: true);
+            writer.WriteCombined(@"C:\Users\Asus", "report.md", isDirectory: false);
+            writer.WriteCombined(@"C:\Users\Asus\Documents", "notes.txt", isDirectory: false);
+            Assert.Equal(3, writer.Finish());
+        }
+
+        IReadOnlyList<SearchResult> results = IndexSearchSource.Search(_path, "report", 5);
+        Assert.Single(results);
+        Assert.Equal(@"C:\Users\Asus\report.md", results[0].Entry.Path);
+        Assert.False(results[0].Entry.IsDirectory);
+    }
 }

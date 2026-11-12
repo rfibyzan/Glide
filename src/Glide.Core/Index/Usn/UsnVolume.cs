@@ -137,30 +137,67 @@ public sealed partial class UsnVolume : IDisposable
     /// </summary>
     public UsnJournalState ReadChanges(UsnJournalState since, Action<UsnEntry>? onEntry = null)
     {
+        return ReadChanges(since, uint.MaxValue, new byte[EnumerateBufferSize], onEntry);
+    }
+
+    /// <summary>Reasons that change a name or an existence: the only ones an index of names cares about.</summary>
+    public const uint NameChangeReasons =
+        0x0000_0100 /* FILE_CREATE */ |
+        0x0000_0200 /* FILE_DELETE */ |
+        0x0000_1000 /* RENAME_OLD_NAME */ |
+        0x0000_2000 /* RENAME_NEW_NAME */;
+
+    /// <summary>A read buffer sized for polling; change batches between polls are small.</summary>
+    public const int ChangeBufferSize = 64 * 1024;
+
+    /// <summary>
+    /// Returns the records written since <paramref name="since"/> whose reason
+    /// intersects <paramref name="reasonMask"/>. The kernel applies the mask, so
+    /// a journal busy with data writes costs one small read per call, and the
+    /// caller owns <paramref name="buffer"/> so a poll loop does not allocate.
+    /// </summary>
+    public UsnJournalState ReadChanges(UsnJournalState since, uint reasonMask, byte[] buffer, Action<UsnEntry>? onEntry)
+    {
+        ArgumentNullException.ThrowIfNull(buffer);
+
         Span<byte> request = stackalloc byte[ReadJournalDataSize];
-        request.Clear();
-        BinaryPrimitives.WriteInt64LittleEndian(request, since.NextUsn);
-        BinaryPrimitives.WriteUInt32LittleEndian(request[8..], uint.MaxValue);
-        BinaryPrimitives.WriteUInt64LittleEndian(request[32..], since.JournalId);
+        UsnJournalState state = since;
 
-        byte[] output = new byte[EnumerateBufferSize];
-        int returned = DeviceIoControl(FsctlReadUsnJournal, request, output);
-
-        if (returned < 8)
+        // One call returns at most one buffer. Keep reading until the journal
+        // has nothing past the current position, capped so a flood of changes
+        // cannot pin the caller.
+        for (int round = 0; round < 64; round++)
         {
-            return since;
+            request.Clear();
+            BinaryPrimitives.WriteInt64LittleEndian(request, state.NextUsn);
+            BinaryPrimitives.WriteUInt32LittleEndian(request[8..], reasonMask);
+            BinaryPrimitives.WriteUInt64LittleEndian(request[32..], state.JournalId);
+
+            int returned = DeviceIoControl(FsctlReadUsnJournal, request, buffer);
+            if (returned < 8)
+            {
+                return state;
+            }
+
+            long next = BinaryPrimitives.ReadInt64LittleEndian(buffer);
+            int offset = 8;
+            ReadOnlySpan<byte> span = buffer.AsSpan(0, returned);
+
+            while (UsnRecordParser.TryRead(span, ref offset, out UsnEntry entry))
+            {
+                onEntry?.Invoke(entry);
+            }
+
+            bool advanced = next > state.NextUsn;
+            state = new UsnJournalState(state.JournalId, Math.Max(state.NextUsn, next));
+
+            if (returned <= 8 || !advanced)
+            {
+                return state;
+            }
         }
 
-        long next = BinaryPrimitives.ReadInt64LittleEndian(output);
-        int offset = 8;
-        ReadOnlySpan<byte> span = output.AsSpan(0, returned);
-
-        while (UsnRecordParser.TryRead(span, ref offset, out UsnEntry entry))
-        {
-            onEntry?.Invoke(entry);
-        }
-
-        return new UsnJournalState(since.JournalId, Math.Max(since.NextUsn, next));
+        return state;
     }
 
     public void Dispose()
@@ -188,6 +225,12 @@ public sealed partial class UsnVolume : IDisposable
                 if (!ok)
                 {
                     int error = Marshal.GetLastWin32Error();
+                    // ERROR_HANDLE_EOF (38) = USN journal is empty (no records yet).
+                    // This is normal for a freshly created journal. Return 0 bytes instead of throwing.
+                    if (error == 38 && code == FsctlEnumUsnData)
+                    {
+                        return 0;
+                    }
                     throw new IOException(
                         $"DeviceIoControl 0x{code:X8} failed on {Device} (Win32 error {error}).",
                         new Win32Exception(error));
