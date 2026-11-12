@@ -71,15 +71,37 @@ users cannot open them, and they would only add noise.
 
 ## Keeping it current
 
-v0.4.0 does not apply change records one by one. After the initial enumeration
-the service remembers the journal's `NextUsn` and polls it every three seconds.
-When new records appear it waits for five quiet seconds, then rebuilds the whole
-file: an enumeration plus a sequential write, 83 ms for a million entries. A
-rebuild cannot drift, and it is simpler than tracking renames, hard links, and
-the journal being wrapped by its own size limit.
+The service does not apply change records one by one. After the initial
+enumeration it remembers the journal's `NextUsn` and polls every two seconds.
+When relevant records appear it waits for three quiet seconds (at most fifteen
+on a busy drive, at least ten between rebuilds), then rebuilds the whole file:
+an enumeration plus a sequential write, 83 ms for a million entries. A rebuild
+cannot drift, and it is simpler than tracking renames, hard links, and the
+journal being wrapped by its own size limit.
 
-Incremental updates are the obvious next step, and the journal state needed for
-them is already kept per volume.
+### Which records count (v0.6.0)
+
+Before v0.6.0 any movement of `NextUsn` scheduled a rebuild. On a system drive
+the journal never stops moving, and the rebuild itself wrote `index-c.gidx` on
+C:, which moved the journal again: the service rebuilt C: every ten to fifteen
+seconds forever, and each rebuild allocated the whole directory table.
+
+Now:
+
+1. `FSCTL_READ_USN_JOURNAL` is called with a reason mask of `FILE_CREATE`,
+   `FILE_DELETE`, `RENAME_OLD_NAME` and `RENAME_NEW_NAME`. The kernel filters,
+   so data writes to logs and databases never reach the service.
+2. `ChangeFilter` drops records whose parent is a quiet directory: the index
+   folder itself, `%TEMP%` folders, browser profiles, `Windows\Prefetch`,
+   `Windows\Logs` and similar caches (the list is in
+   `src/Glide.Core/Index/Usn/ChangeFilter.cs`). Directories skipped by the build,
+   such as `$Recycle.Bin`, are quiet too, and a folder created inside a quiet
+   folder inherits it. Quiet folders are still indexed; they are refreshed by
+   the next rebuild something else triggers.
+3. A failed journal read (journal recreated, position purged) triggers a
+   rebuild after a retry delay, instead of failing on every poll forever.
+4. The 64 KB read buffer is allocated once per volume; polling allocates
+   nothing.
 
 ## Known limits
 
@@ -95,8 +117,10 @@ them is already kept per volume.
 - Index file: 50 bytes per entry, so 50 MB for a million entries.
 - Launcher: 18.4 MB working set with a 100k index loaded and 50 rows on screen;
   19.5 MB in v0.5.0 with themes and settings loaded.
-- Service: the enumeration holds one dictionary of records while it builds, which
-  is the peak; between rebuilds it only polls the journal.
+- Service: the enumeration holds one dictionary of directory records while it
+  builds, which is the peak; a directory path found during the parent walk is
+  reused instead of being built twice (v0.6.0). Between rebuilds it reads at
+  most one 64 KB buffer of filtered records per poll.
 
 ## Testing without administrator rights
 
