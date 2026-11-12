@@ -1,5 +1,11 @@
 using Glide.Core.Index;
 using Glide.Service;
+using Glide.Core.Snapshot;
+using Glide.Core.Index.Usn;
+
+// The LocalSystem account holds SeBackupPrivilege but it is disabled by default.
+// Enable it (best-effort) so the service can open volume USN journals.
+TokenPrivilege.EnableBackupPrivilege();
 
 if (args.Length > 0)
 {
@@ -48,14 +54,27 @@ static int BuildOnce()
             Directory.CreateDirectory(IndexWorker.IndexDirectory);
 
             IndexBuildResult result = IndexBuilder.Build(letter, indexPath);
-            Console.WriteLine(
-                $"{letter}: {result.IndexedEntries} entries from {result.EnumeratedRecords} records " +
-                $"in {new FileInfo(indexPath).Length / (1024 * 1024.0):0.0} MB");
+            if (result.IndexedEntries == 0 && result.EnumeratedRecords > 0)
+            {
+                Console.WriteLine($"{letter}: USN journal returned 0 entries; falling back to full scan...");
+                int scanned = IndexWriter.Write(indexPath, DirectoryScanner.Enumerate(letter + @":\", 200_000));
+                Console.WriteLine($"{letter}: Scanned {scanned} entries.");
+            }
+            else
+            {
+                Console.WriteLine(
+                    $"{letter}: {result.IndexedEntries} entries from {result.EnumeratedRecords} records " +
+                    $"in {new FileInfo(indexPath).Length / (1024 * 1024.0):0.0} MB");
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Console.Error.WriteLine($"{letter}: {ex.Message}");
             failures++;
+        }
+        finally
+        {
+            MemoryTrimmer.Trim();
         }
     }
 
