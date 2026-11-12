@@ -413,6 +413,15 @@ public static class NativeMethods
         string? directory,
         int showCommand);
 
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr ILCreateFromPathW(string path);
+
+    [DllImport("shell32.dll")]
+    public static extern void ILFree(IntPtr pidl);
+
+    [DllImport("shell32.dll")]
+    public static extern int SHOpenFolderAndSelectItems(IntPtr folder, uint count, IntPtr items, uint flags);
+
     [DllImport("user32.dll")]
     public static extern uint GetDpiForWindow(IntPtr hWnd);
 

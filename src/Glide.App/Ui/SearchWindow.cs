@@ -1694,7 +1694,7 @@ internal sealed class SearchWindow
     /// Opens a folder with the file manager chosen in Options (Listary's
     /// "Open folder with"), or with Explorer when none is set.
     /// </summary>
-    private void OpenFolder(string folder)
+    private void OpenFolder(string folder, string? select = null)
     {
         string manager = _settings.OpenFolderWith.Path.Trim().Trim('"');
 
@@ -1708,7 +1708,35 @@ internal sealed class SearchWindow
             }
         }
 
+        if (select is not null && OpenFolderAndSelect(select))
+        {
+            return;
+        }
+
         NativeMethods.ShellExecuteW(IntPtr.Zero, "open", folder, null, null, NativeMethods.SwShow);
+    }
+
+    /// <summary>
+    /// Opens the item's parent folder in Explorer with the item selected and
+    /// scrolled into view (what "Open file location" does), so a large folder
+    /// needs no scrolling.
+    /// </summary>
+    private static bool OpenFolderAndSelect(string path)
+    {
+        IntPtr pidl = NativeMethods.ILCreateFromPathW(path);
+        if (pidl == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        try
+        {
+            return NativeMethods.SHOpenFolderAndSelectItems(pidl, 0, IntPtr.Zero, 0) >= 0;
+        }
+        finally
+        {
+            NativeMethods.ILFree(pidl);
+        }
     }
 
     /// <summary>Built-in commands followed by the user's own.</summary>
@@ -1780,12 +1808,12 @@ internal sealed class SearchWindow
             IntPtr explorer = _explorerTarget;
             Hide();
 
-            bool handled = (explorer != IntPtr.Zero && NavigateExplorer(explorer, folder)) ||
+            bool handled = (explorer != IntPtr.Zero && NavigateExplorer(explorer, folder, path)) ||
                 (_settings.Integration.EnableFileDialogIntegration && FileDialogIntegration.TryInjectPath(folder));
 
             if (!handled)
             {
-                OpenFolder(folder);
+                OpenFolder(folder, path);
             }
 
             HistoryStore.Default.Add(folder);
@@ -1831,9 +1859,9 @@ internal sealed class SearchWindow
     /// <summary>The Explorer window or file dialog a bar belongs to, or zero.</summary>
     private IntPtr _barTarget;
 
-    private static bool NavigateExplorer(IntPtr explorer, string folder)
+    private static bool NavigateExplorer(IntPtr explorer, string folder, string? select = null)
     {
-        if (!NativeMethods.IsWindow(explorer) || !ExplorerFolders.Navigate(explorer, folder))
+        if (!NativeMethods.IsWindow(explorer) || !ExplorerFolders.Navigate(explorer, folder, select))
         {
             return false;
         }

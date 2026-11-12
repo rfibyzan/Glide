@@ -24,7 +24,11 @@ internal static unsafe class ExplorerFolders
     private const uint ClsctxAll = 0x17;
     private const ushort VtI4 = 3;
     private const ushort VtBstr = 8;
+    private const ushort VtDispatch = 9;
     private const ushort VtI8 = 20;
+
+    /// <summary>SVSI_SELECT | SVSI_DESELECTOTHERS | SVSI_ENSUREVISIBLE | SVSI_FOCUSED.</summary>
+    private const int SvsiSelectFocusVisible = 0x1 | 0x4 | 0x8 | 0x10;
     private const ushort DispatchMethod = 1;
     private const ushort DispatchPropertyGet = 2;
     private const uint GwHwndNext = 2;
@@ -117,7 +121,7 @@ internal static unsafe class ExplorerFolders
     /// to <paramref name="folder"/>, in place. Returns false when that window is
     /// gone, so the caller can open a new window instead.
     /// </summary>
-    public static bool Navigate(IntPtr frame, string folder)
+    public static bool Navigate(IntPtr frame, string folder, string? select = null)
     {
         if (frame == IntPtr.Zero || !Directory.Exists(folder))
         {
@@ -137,7 +141,7 @@ internal static unsafe class ExplorerFolders
 
             if (TitleMatches(title, GetString(browser, "LocationName"), UrlToPath(GetString(browser, "LocationURL"))))
             {
-                navigated = NavigateTo(browser, folder);
+                navigated = NavigateTo(browser, folder, select);
                 return false;
             }
 
@@ -153,7 +157,7 @@ internal static unsafe class ExplorerFolders
 
         if (!navigated && fallback != IntPtr.Zero)
         {
-            navigated = NavigateTo(fallback, folder);
+            navigated = NavigateTo(fallback, folder, select);
         }
 
         Release(fallback);
@@ -172,18 +176,120 @@ internal static unsafe class ExplorerFolders
                (!string.IsNullOrEmpty(path) && title.StartsWith(path, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool NavigateTo(IntPtr browser, string folder)
+    private static bool NavigateTo(IntPtr browser, string folder, string? select)
     {
         IntPtr bstr = SysAllocString(folder);
+        bool navigated;
         try
         {
             var argument = new Variant { Type = VtBstr, Pointer = bstr };
-            return Invoke(browser, "Navigate2", DispatchMethod, &argument, 1, null);
+            navigated = Invoke(browser, "Navigate2", DispatchMethod, &argument, 1, null);
         }
         finally
         {
             SysFreeString(bstr);
         }
+
+        if (navigated && select is not null)
+        {
+            SelectWhenLoaded(browser, folder, select);
+        }
+
+        return navigated;
+    }
+
+    /// <summary>
+    /// Navigation is asynchronous: waits (up to two seconds) for the tab's view
+    /// to show <paramref name="folder"/>, then selects, focuses and scrolls to
+    /// <paramref name="path"/> through <c>IShellFolderViewDual.SelectItem</c>.
+    /// </summary>
+    private static void SelectWhenLoaded(IntPtr browser, string folder, string path)
+    {
+        string name = System.IO.Path.GetFileName(path.TrimEnd('\\'));
+        if (name.Length == 0)
+        {
+            return;
+        }
+
+        string target = folder.TrimEnd('\\');
+        long deadline = Environment.TickCount64 + 2000;
+
+        while (Environment.TickCount64 < deadline)
+        {
+            IntPtr view = GetDispatch(browser, "Document");
+            IntPtr shellFolder = view == IntPtr.Zero ? IntPtr.Zero : GetDispatch(view, "Folder");
+            IntPtr self = shellFolder == IntPtr.Zero ? IntPtr.Zero : GetDispatch(shellFolder, "Self");
+
+            try
+            {
+                string? shown = self == IntPtr.Zero ? null : GetString(self, "Path");
+                if (shown is not null && shown.TrimEnd('\\').Equals(target, StringComparison.OrdinalIgnoreCase))
+                {
+                    SelectItem(view, shellFolder, name);
+                    return;
+                }
+            }
+            finally
+            {
+                Release(self);
+                Release(shellFolder);
+                Release(view);
+            }
+
+            Thread.Sleep(50);
+        }
+    }
+
+    private static void SelectItem(IntPtr view, IntPtr shellFolder, string name)
+    {
+        IntPtr item = IntPtr.Zero;
+        IntPtr bstr = SysAllocString(name);
+        try
+        {
+            var argument = new Variant { Type = VtBstr, Pointer = bstr };
+            Variant result = default;
+            if (!Invoke(shellFolder, "ParseName", DispatchMethod, &argument, 1, &result))
+            {
+                return;
+            }
+
+            if (result.Type != VtDispatch || result.Pointer == IntPtr.Zero)
+            {
+                VariantClear(&result);
+                return;
+            }
+
+            item = result.Pointer;
+
+            // DISPPARAMS lists arguments last first: (item, flags) becomes [flags, item].
+            Variant* arguments = stackalloc Variant[2];
+            arguments[0] = new Variant { Type = VtI4, Pointer = SvsiSelectFocusVisible };
+            arguments[1] = new Variant { Type = VtDispatch, Pointer = item };
+            Invoke(view, "SelectItem", DispatchMethod, arguments, 2, null);
+        }
+        finally
+        {
+            SysFreeString(bstr);
+            Release(item);
+        }
+    }
+
+    /// <summary>Reads an object-valued property; the caller releases it.</summary>
+    private static IntPtr GetDispatch(IntPtr instance, string member)
+    {
+        Variant result = default;
+        if (!Invoke(instance, member, DispatchPropertyGet, null, 0, &result))
+        {
+            return IntPtr.Zero;
+        }
+
+        if (result.Type == VtDispatch && result.Pointer != IntPtr.Zero)
+        {
+            return result.Pointer;
+        }
+
+        VariantClear(&result);
+        return IntPtr.Zero;
     }
 
     private static void EnumerateBrowsers(Func<IntPtr, bool> visit)
