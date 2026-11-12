@@ -1,0 +1,7 @@
+<Project>
+  <!-- The SDK's implicit NativeAOT compiler (8.0.32) carries GHSA-p3jp-9v83-76w9.
+       Pin the patched release for every project that publishes with AOT. -->
+  <ItemGroup Condition="'$(PublishAot)' == 'true'">
+    <PackageReference Include="Microsoft.DotNet.ILCompiler" Version="8.0.34" />
+  </ItemGroup>
+</Project>
