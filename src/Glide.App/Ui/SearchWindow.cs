@@ -2151,7 +2151,7 @@ internal sealed class SearchWindow
         if (intent.Kind == QueryKind.Browse)
         {
             bool showHidden = !_settings.FileSearch.HideSystemAndHidden;
-            StartSearch(generation, _ => [.. FolderBrowser.List(intent.Folder!, intent.Text, MaxQueryResults, showHidden)]);
+            StartSearch(generation, 0, _ => [.. FolderBrowser.List(intent.Folder!, intent.Text, MaxQueryResults, showHidden)]);
             return;
         }
 
@@ -2161,7 +2161,15 @@ internal sealed class SearchWindow
         List<LauncherCommand> allCommands = AllCommands();
         string[] recent = HistoryStore.Default.Items;
 
-        StartSearch(generation, cancellation =>
+        // A full index scan costs about a CPU-second on a large index. While
+        // keys arrive in a burst, each scan would be cancelled by the next
+        // key anyway, so wait for a short pause first; a key typed after a
+        // pause searches at once.
+        long now = Environment.TickCount64;
+        int delayMs = now - _lastIndexQueryTicks < TypingBurstMs ? TypingDebounceMs : 0;
+        _lastIndexQueryTicks = now;
+
+        StartSearch(generation, delayMs, cancellation =>
         {
             SearchResult[] files;
 
@@ -2216,14 +2224,20 @@ internal sealed class SearchWindow
     private PendingResults? _pending;
     private bool _searching;
     private bool _openWhenReady;
+    private long _lastIndexQueryTicks;
+
+    // Keys closer together than this are one burst of typing.
+    private const int TypingBurstMs = 150;
+    private const int TypingDebounceMs = 60;
 
     /// <summary>
     /// Runs one query off the window thread. The window keeps taking keys and
     /// painting while the index is scanned; the results come back through
     /// <see cref="WmSearchDone"/> and are applied only if no newer query
-    /// started meanwhile.
+    /// started meanwhile. A delay lets the next keystroke cancel the query
+    /// before it reads anything.
     /// </summary>
-    private void StartSearch(int generation, Func<CancellationToken, SearchResult[]> search)
+    private void StartSearch(int generation, int delayMs, Func<CancellationToken, SearchResult[]> search)
     {
         // Not disposed on purpose: a cancelled source owns no timer or handle,
         // and disposing it under a running Parallel.For can throw there.
@@ -2233,8 +2247,20 @@ internal sealed class SearchWindow
         CancellationToken cancellation = source.Token;
         IntPtr hwnd = _hwnd;
 
-        Task.Run(() =>
+        Task.Run(async () =>
         {
+            if (delayMs > 0)
+            {
+                try
+                {
+                    await Task.Delay(delayMs, cancellation).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+            }
+
             SearchResult[] results;
 
             try
