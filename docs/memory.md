@@ -91,3 +91,27 @@ That is +1.1 MB over v0.4.0: two color sets' brushes and fonts, the parsed
 settings object, and at most 100 cached path strings from the two stores. Both
 themes stay 30 MB under the budget.
 
+
+## Listary parity, v0.6.0
+
+Same 100k index, published binary, with the keyboard hook thread, the
+foreground watcher for Quick Switch, and COM initialized on the window thread:
+
+| Case | Working set | Private |
+|---|---:|---:|
+| Hidden, idle (`measure-memory.ps1`, 8 s) | 13.3 MB p95 | |
+| After six queries, including `C:\` browsing and Explorer folder lookup | 28.1 MB | 14.7 MB |
+
+The idle figure is lower than v0.5.0 because the GC no longer runs a background
+thread (`ConcurrentGarbageCollection=false`) and compacts more eagerly
+(`System.GC.ConserveMemory=5`). The hook thread reserves a 128 KB stack. After
+use, most of the working set is shared pages from `shell32`/`combase` that the
+first `ShellExecute` or COM call maps; private memory stays under 15 MB.
+
+The service gets the same GC settings. Its idle cost was dominated by
+rebuilding the C: index every ten to fifteen seconds, which v0.6.0 stops; see
+`docs/index.md`, "Which records count". Its working set could not be measured
+here without an elevated shell.
+
+For comparison, Listary on the same machine: 222.9 MB working set and 362.8 MB
+private in `Listary.exe` alone (`docs/listary-analysis.md`).

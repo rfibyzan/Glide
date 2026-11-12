@@ -17,7 +17,7 @@ public static class IndexSearchSource
     private const int ParallelThresholdBytes = 2 * 1024 * 1024;
     private const int MaxWorkers = 8;
 
-    public static IReadOnlyList<SearchResult> Search(string indexPath, string? query, int limit = 50)
+    public static IReadOnlyList<SearchResult> Search(string indexPath, string? query, int limit = 50, SearchConstraints? constraints = null, CancellationToken cancellation = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(indexPath);
 
@@ -31,7 +31,7 @@ public static class IndexSearchSource
         using SafeFileHandle handle = IndexFile.OpenHandle(indexPath);
         IndexHeader header = IndexFile.ReadHeader(handle);
 
-        if (terms.Length == 0)
+        if (terms.Length == 0 && constraints is null)
         {
             return First(handle, header, limit);
         }
@@ -40,8 +40,8 @@ public static class IndexSearchSource
         int workers = WorkCount(header.RecordsLength);
 
         return workers == 1
-            ? ScanRange(handle, header.RecordsOffset, header.RecordsOffset + header.RecordsLength, terms, termBytes, limit, alignStart: false)
-            : ScanInParallel(indexPath, header, terms, termBytes, limit, workers);
+            ? ScanRange(handle, header.RecordsOffset, header.RecordsOffset + header.RecordsLength, terms, termBytes, limit, alignStart: false, constraints, cancellation)
+            : ScanInParallel(indexPath, header, terms, termBytes, limit, workers, constraints, cancellation);
     }
 
     /// <summary>
@@ -52,7 +52,9 @@ public static class IndexSearchSource
     public static IReadOnlyList<SearchResult> SearchMany(
         IReadOnlyList<string> indexPaths,
         string? query,
-        int limit = 50)
+        int limit = 50,
+        SearchConstraints? constraints = null,
+        CancellationToken cancellation = default)
     {
         ArgumentNullException.ThrowIfNull(indexPaths);
 
@@ -63,18 +65,18 @@ public static class IndexSearchSource
 
         if (indexPaths.Count == 1)
         {
-            return Search(indexPaths[0], query, limit);
+            return Search(indexPaths[0], query, limit, constraints, cancellation);
         }
 
         string[] terms = QueryParser.Parse(query);
 
-        if (terms.Length == 0)
+        if (terms.Length == 0 && constraints is null)
         {
             var prefix = new List<SearchResult>(limit);
 
             foreach (string indexPath in indexPaths)
             {
-                prefix.AddRange(Search(indexPath, query, limit - prefix.Count));
+                prefix.AddRange(Search(indexPath, query, limit - prefix.Count, constraints));
 
                 if (prefix.Count == limit)
                 {
@@ -89,7 +91,12 @@ public static class IndexSearchSource
 
         foreach (string indexPath in indexPaths)
         {
-            foreach (SearchResult candidate in Search(indexPath, query, limit))
+            if (!CoversScope(indexPath, constraints))
+            {
+                continue;
+            }
+
+            foreach (SearchResult candidate in Search(indexPath, query, limit, constraints, cancellation))
             {
                 EntryScorer.Insert(merged, candidate.Score, candidate.Entry.Path, candidate.Entry.IsDirectory, limit);
             }
@@ -103,6 +110,27 @@ public static class IndexSearchSource
     {
         using SafeFileHandle handle = IndexFile.OpenHandle(indexPath);
         return (int)IndexFile.ReadHeader(handle).Count;
+    }
+
+    /// <summary>
+    /// The service names files <c>index-c.gidx</c>, one per volume, so a query
+    /// scoped to <c>D:\</c> can skip reading every other volume's file.
+    /// Files named differently are always searched.
+    /// </summary>
+    public static bool CoversScope(string indexPath, SearchConstraints? constraints)
+    {
+        if (constraints?.ScopeDrive is not char drive)
+        {
+            return true;
+        }
+
+        string name = Path.GetFileNameWithoutExtension(indexPath);
+        if (name.Length == 7 && name.StartsWith("index-", StringComparison.OrdinalIgnoreCase) && char.IsAsciiLetter(name[6]))
+        {
+            return char.ToUpperInvariant(name[6]) == drive;
+        }
+
+        return true;
     }
 
     private static int WorkCount(long recordsLength)
@@ -120,12 +148,16 @@ public static class IndexSearchSource
         string[] terms,
         byte[][]? termBytes,
         int limit,
-        int workers)
+        int workers,
+        SearchConstraints? constraints,
+        CancellationToken cancellation)
     {
         long chunk = (header.RecordsLength + workers - 1) / workers;
         var parts = new List<SearchResult>[workers];
 
-        Parallel.For(0, workers, worker =>
+        var options = new ParallelOptions { CancellationToken = cancellation };
+
+        Parallel.For(0, workers, options, worker =>
         {
             long start = header.RecordsOffset + (worker * chunk);
             long end = Math.Min(header.RecordsOffset + header.RecordsLength, start + chunk);
@@ -140,7 +172,7 @@ public static class IndexSearchSource
             // are serialized by the file object, and opening the handle for
             // overlapped I/O instead makes RandomAccess fault under NativeAOT.
             using SafeFileHandle handle = IndexFile.OpenHandle(indexPath);
-            parts[worker] = ScanRange(handle, start, end, terms, termBytes, limit, alignStart: worker > 0);
+            parts[worker] = ScanRange(handle, start, end, terms, termBytes, limit, alignStart: worker > 0, constraints, cancellation);
         });
 
         var merged = new List<SearchResult>(limit);
@@ -180,7 +212,9 @@ public static class IndexSearchSource
         string[] terms,
         byte[][]? termBytes,
         int limit,
-        bool alignStart)
+        bool alignStart,
+        SearchConstraints? constraints = null,
+        CancellationToken cancellation = default)
     {
         var top = new TopBuffer(limit);
         char[] pathBuffer = ArrayPool<char>.Shared.Rent(MaxPathChars);
@@ -189,9 +223,25 @@ public static class IndexSearchSource
         {
             using var reader = new RecordReader(handle, start, end, alignStart);
 
+            int sinceCheck = 0;
+
             while (reader.TryNext(out byte flags, out ReadOnlySpan<byte> pathBytes))
             {
+                // A newer keystroke supersedes this query; stop within a few
+                // thousand rows instead of finishing a scan nobody will see.
+                if (++sinceCheck == 4096)
+                {
+                    sinceCheck = 0;
+                    cancellation.ThrowIfCancellationRequested();
+                }
+
                 bool isAscii = (flags & IndexFile.AsciiPathFlag) != 0;
+
+                if (constraints is not null && !constraints.Accepts(pathBytes, IsDirectory(flags)))
+                {
+                    continue;
+                }
+
                 int score;
 
                 if (termBytes is not null && isAscii)

@@ -9,7 +9,7 @@ namespace Glide.Core.Snapshot;
 /// </summary>
 public static class DirectoryScanner
 {
-    public static EntryStore Scan(string root, int maxEntries = 200_000)
+    public static IEnumerable<FileEntry> Enumerate(string root, int maxEntries = 200_000)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
 
@@ -26,21 +26,23 @@ public static class DirectoryScanner
             ReturnSpecialDirectories = false,
         };
 
-        var entries = new List<FileEntry>(capacity: 4096);
-
+        int count = 0;
         foreach (FileSystemInfo info in new DirectoryInfo(root).EnumerateFileSystemInfos("*", options))
         {
             bool isDirectory = (info.Attributes & FileAttributes.Directory) != 0;
             long size = !isDirectory && info is FileInfo file ? file.Length : 0;
 
-            entries.Add(new FileEntry(info.FullName, isDirectory, size, info.LastWriteTimeUtc));
+            yield return new FileEntry(info.FullName, isDirectory, size, info.LastWriteTimeUtc);
 
-            if (entries.Count >= maxEntries)
+            if (++count >= maxEntries)
             {
                 break;
             }
         }
+    }
 
-        return new EntryStore(entries);
+    public static EntryStore Scan(string root, int maxEntries = 200_000)
+    {
+        return new EntryStore(Enumerate(root, maxEntries));
     }
 }

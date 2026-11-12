@@ -49,6 +49,34 @@ internal static class Program
                 return RunIdle(args, idle);
             }
 
+            if (HasFlag(args, "--explorer-tabs"))
+            {
+                return RunExplorerTabs();
+            }
+
+            if (GetValue(args, "--search") is string probeQuery)
+            {
+                // Diagnostic: the window's index search, printed.
+                string[] indexes = Glide.App.Search.IndexLocator.Find();
+                Console.WriteLine($"{indexes.Length} index file(s): {string.Join(", ", indexes)}");
+                var intent = Glide.Core.Search.QueryIntentParser.Parse(probeQuery, SettingsManager.Load().SearchFilters, SettingsManager.Load().WebSearches);
+                var timer = Stopwatch.StartNew();
+                var found = IndexSearchSource.SearchMany(indexes, intent.Text, 100, intent.Constraints);
+                foreach (var result in Glide.Core.Search.RecentBoost.Apply(found, Glide.Core.HistoryStore.Default.Items, intent.Text, 10, intent.Constraints))
+                {
+                    Console.WriteLine($"  {result.Score,6}  {result.Entry.Path}");
+                }
+
+                Console.WriteLine($"{timer.ElapsedMilliseconds} ms");
+                return 0;
+            }
+
+            if (HasFlag(args, "--dialog-probe"))
+            {
+                Glide.App.Integration.FileDialogIntegration.Probe(Console.Out);
+                return 0;
+            }
+
             if (HasFlag(args, "--help") || HasFlag(args, "-h") || HasFlag(args, "/?"))
             {
                 PrintUsage();
@@ -64,15 +92,48 @@ internal static class Program
         }
     }
 
+    /// <summary>
+    /// Diagnostic: prints the Explorer tabs Glide can see, the way Quick Switch
+    /// and the Explorer bar see them. Reads only; navigates nothing.
+    /// </summary>
+    private static int RunExplorerTabs()
+    {
+        _ = CoInitializeEx(IntPtr.Zero, 0x2);
+
+        foreach (Glide.App.Integration.ExplorerFolders.ExplorerTab tab in Glide.App.Integration.ExplorerFolders.GetTabs())
+        {
+            Console.WriteLine($"frame 0x{tab.Frame:X}  {(tab.Active ? "active" : "      ")}  {tab.Path ?? "(virtual folder)"}");
+        }
+
+        Console.WriteLine("open folders, most recent first:");
+        foreach (string folder in Glide.App.Integration.ExplorerFolders.GetOpenFolders())
+        {
+            Console.WriteLine("  " + folder);
+        }
+
+        return 0;
+    }
+
+    [System.Runtime.InteropServices.DllImport("ole32.dll")]
+    private static extern int CoInitializeEx(IntPtr reserved, uint flags);
+
     private static int RunUi(string[] args)
     {
         AppSettings settings = SettingsManager.LoadOrCreate();
+        Glide.Core.Search.PriorityEvaluator.Initialize(settings.FileSearch);
 
         using var mutex = new Mutex(initiallyOwned: true, InstanceMutexName, out bool isFirstInstance);
 
         if (!isFirstInstance)
         {
-            SearchWindow.RequestShow();
+            if (HasFlag(args, "--show"))
+            {
+                SearchWindow.RequestShow();
+            }
+            else
+            {
+                SearchWindow.RequestSettings();
+            }
             return 0;
         }
 
@@ -90,7 +151,8 @@ internal static class Program
             HasFlag(args, "--show"),
             maxEntries,
             settings,
-            GetValue(args, "--hotkey"));
+            GetValue(args, "--hotkey"),
+            showSettingsOnStart: HasFlag(args, "--settings"));
     }
 
     /// <summary>

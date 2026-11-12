@@ -18,7 +18,10 @@ under 50 MB idle as a single native-AOT process.
 | v0.3.0 | Window, global hotkey, folder scan | done, 38.5 MB with 100k entries shown, UI smoke green |
 | v0.4.0 | NTFS USN index for whole drives | done, 18.4 MB with a 100k index, 19 ms p50 at 1M |
 | v0.5.0 | Dark mode, configurable hotkey, actions, calculator, bookmarks, history | done, 19.5 MB with a 100k index, UI smoke 6/6 in both themes |
-| v0.6.0 | Quick switch in file dialogs | planned |
+| v0.6.0 | Listary parity: Options window, tray icon, Explorer and dialog bars, Quick Switch, filters, folder scope and browsing, web searches, commands; quiet service | done, 13.3 MB idle with a 100k index, 181 tests |
+
+v0.6.0 was planned from a metadata-only analysis of the installed Listary 6
+(settings classes, enums, PE imports); see `docs/listary-analysis.md`.
 
 One window, one hotkey, real search. Typing filters the loaded entries, arrow
 keys move the selection, Enter opens the result, Escape hides the window, and
@@ -40,13 +43,42 @@ the number of indexed files. See `docs/index.md`.
 
 | Key | Action |
 |---|---|
-| `Enter` | open the selected result |
+| `Ctrl+G` inside an Open/Save dialog | Quick Switch: jump the dialog to the folder open in Explorer |
+| `Enter` | open the selected result; over a file dialog, send it to the dialog |
+| `Tab` | on a folder row, type that folder into the query to browse inside it |
+| `Ctrl+1` … `Ctrl+8` | open one of the first eight results; the numbers stay with those results when the list scrolls |
+| a letter or digit in an Explorer file list | open a compact search bar inside that Explorer window, bottom right; Enter on a folder opens it in the same window |
+| an Open/Save dialog opens | a search bar appears under it and stays while the dialog is open; click it for the folders open in Explorer and recent places, or type in the dialog's file list to search. Enter on a folder moves the dialog there, on a file picks it; Esc goes back to the dialog |
 | `Ctrl+Enter` | open its containing folder |
 | `Shift+Enter` or `Ctrl+C` | copy its full path |
-| `F2`, the context-menu key, or right click | actions menu: open, open folder, copy path, bookmark, properties |
+| `F2`, the context-menu key, or right click | actions menu: open, open folder, copy path, open in terminal, bookmark, properties |
 | `Up` / `Down` | move the selection |
 | `Escape` | hide the window |
 | `Ctrl+V` | paste a path into the query |
+
+### Query syntax
+
+| Query | Result |
+|---|---|
+| `report 2024` | every term matches the name or the path (fuzzy) |
+| `doc: budget`, `pic:`, `folder: src` | filters: `folder`, `file`, `doc`, `pic`, `audio`, `video`, `zip`, `app`, `code` |
+| `invoice ext:pdf,docx` | only those extensions |
+| `C:\Us` | browse: the children of `C:\` that match `Us`, read from disk (works on USB and network drives too) |
+| `D:\Projects\ readme` | search the index under that folder only; other volumes' index files are skipped |
+| `gg weather`, `yt`, `wiki`, `gh`, `ddg`, `bing`, `maps` | open a web search |
+| `settings`, `exit`, `recycle` | built-in commands |
+
+A query that matches nothing on disk offers the first web search instead.
+
+### Quick Switch
+
+When an Open or Save dialog is in front, `Ctrl+G` jumps it to the folder of the
+most recent Explorer window. Opening Glide over a dialog lists the folders open
+in Explorer first, then history; Enter sends the chosen folder or file to the
+dialog. A file name already typed in a Save dialog is put back after the jump.
+`Ctrl+G` is registered only while a file dialog is in front, so it keeps its
+meaning in every other program. No DLL is injected anywhere: Explorer's folders
+come from `IShellWindows`, and the dialog is driven with window messages.
 
 ### Calculator
 
@@ -85,6 +117,16 @@ to the settings, in `%APPDATA%\Glide`.
   failing silently.
 - A missing or malformed file is logged to stderr and replaced by the defaults;
   it never blocks startup.
+- Everything below can also be changed in the Options window (tray icon → Settings, or type `settings`). OK and Apply take effect at once: the shortcut is re-registered, and if another program owns it the window says so and keeps the old one.
+- `hotkey.pressAgainHides`, `hotkey.disableInFullScreen`, `hideWhenLosingFocus`, `openFolderWith` (`path`, `arguments` with `%1`) and `customCommands` (`title`, `target`, `arguments`) follow Listary's options of the same purpose. "Start Glide when Windows starts" is the `Glide` value under `HKCUSoftwareMicrosoftWindowsCurrentVersionRun`.
+- `showTrayIcon` (default `true`): click the icon to search, right-click for Settings and Exit.
+- `integration.explorerTypeToSearch` (default `true`): type in Explorer or a file dialog to search.
+- `integration.quickSwitchHotkey` (default `Ctrl+G`) and
+  `integration.enableQuickSwitch` control Quick Switch.
+- `searchFilters` is a list of `{ "keyword", "name", "extensions", "foldersOnly",
+  "filesOnly" }`; `webSearches` is a list of `{ "keyword", "name", "url" }` where
+  the URL contains `{query}`. A file written before v0.6.0 gets the defaults; an
+  empty list turns the feature off.
 
 Nothing in this repository runs as a Windows shell extension yet. The core is a
 plain library and can be exercised from tests.
@@ -138,7 +180,12 @@ waits 800 ms after the window appears so the first press does not race
 `RegisterHotKey`.
 
 Requires the .NET 8 SDK. NativeAOT publishing needs the MSVC build tools on the
-machine that publishes.
+machine that publishes. With Visual Studio 18, its `vcvarsall.bat` calls
+`vswhere.exe` from `PATH`; if the link step fails with "vswhere.exe is not
+recognized", add `%ProgramFiles(x86)%\Microsoft Visual Studio\Installer` to `PATH`.
+The NativeAOT compiler is pinned to 8.0.34 in `Directory.Build.targets`, because
+the SDK default (8.0.32) carries GHSA-p3jp-9v83-76w9 and the build treats that
+warning as an error.
 
 ## Design
 
@@ -146,8 +193,10 @@ machine that publishes.
 - One popup window custom-drawn with Win32 and GDI, one UI thread, no child controls.
   Dark and light are two color sets over the same paint code; no control restyle.
 - One global hotkey, `Ctrl+Shift+Alt+/` by default, registered with
-  `RegisterHotKey`; no keyboard hook. It is read from `settings.json` and can be
-  overridden per run with `--hotkey`.
+  `RegisterHotKey`. It is read from `settings.json` and can be overridden per run
+  with `--hotkey`. Typing in Explorer and file dialogs is noticed by a low-level keyboard hook on its own
+  thread inside Glide, so a slow query can never delay typing elsewhere. No hook
+  DLL is injected into other processes.
 - The index is a file that is streamed per query, not a heap graph; a million
   entries occupy 50 MB on disk and none of the launcher's heap.
 - Ranking is a pure function, documented in `docs/ranking.md`.

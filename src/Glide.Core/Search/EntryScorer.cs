@@ -11,10 +11,18 @@ internal static class EntryScorer
     internal const int NameTier = 1000;
     internal const int PathPenalty = 50;
 
+    /// <summary>
+    /// A name match worth at least this per query character is "strong": a
+    /// mostly contiguous run (26 points a character) clears it, letters
+    /// scattered across a long name (around zero) do not.
+    /// </summary>
+    internal const int StrongPerCharacter = 10;
+
     internal static bool TryScore(ReadOnlySpan<char> path, string[] terms, out int score)
     {
         ReadOnlySpan<char> name = NameOf(path);
         int total = 0;
+        bool strong = true;
 
         for (int t = 0; t < terms.Length; t++)
         {
@@ -23,6 +31,7 @@ internal static class EntryScorer
             if (nameScore is int matchedName)
             {
                 total += NameTier + matchedName;
+                strong &= matchedName >= StrongPerCharacter * terms[t].Length;
                 continue;
             }
 
@@ -34,7 +43,22 @@ internal static class EntryScorer
             }
 
             total += pathScore.Value - PathPenalty;
+            strong = false;
         }
+
+        // Exclusion is checked only for rows that matched every term: it is a
+        // substring search, and running it on every row of a million-row
+        // index cost more than the matching itself.
+        if (PriorityEvaluator.IsExcluded(path))
+        {
+            score = 0;
+            return false;
+        }
+
+        // A priority folder lifts a clean match, never a scattered one: the
+        // Start Menu boost must not put "M...a...c...r...o" above "Macro".
+        int adjustment = PriorityEvaluator.GetScoreAdjustment(path, name);
+        total += adjustment > 0 && !strong ? 0 : adjustment;
 
         score = total;
         return true;
@@ -45,6 +69,7 @@ internal static class EntryScorer
     {
         ReadOnlySpan<byte> name = NameOfBytes(path);
         int total = 0;
+        bool strong = true;
 
         foreach (byte[] term in terms)
         {
@@ -53,6 +78,7 @@ internal static class EntryScorer
             if (nameScore is int matchedName)
             {
                 total += NameTier + matchedName;
+                strong &= matchedName >= StrongPerCharacter * term.Length;
                 continue;
             }
 
@@ -64,7 +90,22 @@ internal static class EntryScorer
             }
 
             total += pathScore.Value - PathPenalty;
+            strong = false;
         }
+
+        // Exclusion is checked only for rows that matched every term: it is a
+        // substring search, and running it on every row of a million-row
+        // index cost more than the matching itself.
+        if (PriorityEvaluator.IsExcludedBytes(path))
+        {
+            score = 0;
+            return false;
+        }
+
+        // A priority folder lifts a clean match, never a scattered one: the
+        // Start Menu boost must not put "M...a...c...r...o" above "Macro".
+        int adjustment = PriorityEvaluator.GetScoreAdjustmentBytes(path, name);
+        total += adjustment > 0 && !strong ? 0 : adjustment;
 
         score = total;
         return true;
@@ -132,6 +173,16 @@ internal static class EntryScorer
 
     /// <summary>Recomputes highlight positions for the rows that made the cut.</summary>
     internal static void FillPositions(List<SearchResult> ranked, string[] terms)
+    {
+        if (terms.Length == 0)
+        {
+            return;
+        }
+
+        FillPositionsCore(ranked, terms);
+    }
+
+    private static void FillPositionsCore(List<SearchResult> ranked, string[] terms)
     {
         for (int i = 0; i < ranked.Count; i++)
         {

@@ -140,4 +140,54 @@ public class UsnTests
         Assert.Single(results);
         Assert.Equal(@"C:\Users\Asus\Documents\notes.md", results[0].Entry.Path);
     }
+
+    [Fact]
+    public void RecognizesNtfsSequenceNumberedRoot()
+    {
+        Assert.True(UsnPathResolver.IsRoot(5));
+        Assert.True(UsnPathResolver.IsRoot((5UL << 48) | 5UL));
+        Assert.True(UsnPathResolver.IsRoot((1UL << 48) | 5UL));
+        Assert.False(UsnPathResolver.IsRoot(10));
+        Assert.False(UsnPathResolver.IsRoot((5UL << 48) | 10UL));
+    }
+
+    [Fact]
+    public void ResolvesPathsWithNtfsSequenceNumbers()
+    {
+        ulong rootId = (5UL << 48) | 5UL;
+        ulong usersId = (2UL << 48) | 10UL;
+        ulong asusId = (1UL << 48) | 11UL;
+        ulong fileId = (4UL << 48) | 12UL;
+
+        var entries = new Dictionary<ulong, UsnEntry>
+        {
+            [rootId] = new(rootId, rootId, 0x10, "."),
+            [usersId] = new(usersId, rootId, 0x10, "Users"),
+            [asusId] = new(asusId, usersId, 0x10, "Asus"),
+            [fileId] = new(fileId, asusId, 0, "report.txt"),
+        };
+
+        List<FileEntry> resolved = [.. UsnPathResolver.Resolve(entries, @"C:\")];
+        Assert.Contains(resolved, e => e.Path == @"C:\Users\Asus\report.txt" && !e.IsDirectory);
+        Assert.Contains(resolved, e => e.Path == @"C:\Users\Asus" && e.IsDirectory);
+        Assert.Contains(resolved, e => e.Path == @"C:\Users" && e.IsDirectory);
+    }
+
+    [Fact]
+    public void ResolvesDirectoryPathsCompactly()
+    {
+        ulong rootId = (5UL << 48) | 5UL;
+        ulong usersId = (2UL << 48) | 10UL;
+        ulong asusId = (1UL << 48) | 11UL;
+
+        var directories = new Dictionary<ulong, UsnEntry>
+        {
+            [usersId & UsnPathResolver.MftRecordMask] = new(usersId, rootId, 0x10, "Users"),
+            [asusId & UsnPathResolver.MftRecordMask] = new(asusId, usersId, 0x10, "Asus"),
+        };
+
+        var resolved = UsnPathResolver.ResolveDirectoryPaths(directories, @"C:\");
+        Assert.Equal(@"C:\Users", resolved[usersId & UsnPathResolver.MftRecordMask]);
+        Assert.Equal(@"C:\Users\Asus", resolved[asusId & UsnPathResolver.MftRecordMask]);
+    }
 }

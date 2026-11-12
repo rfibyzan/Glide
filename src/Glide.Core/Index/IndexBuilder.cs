@@ -5,8 +5,9 @@ namespace Glide.Core.Index;
 
 /// <summary>
 /// Builds an index file from a volume's USN journal. Enumeration and resolution
-/// are separate steps because the journal is not hierarchical: every record has
-/// to be collected before parent links can be followed.
+/// are performed in two passes:
+/// 1. Directories are collected and resolved into full paths (~5-10 MB heap).
+/// 2. Records are streamed directly to disk without allocating file paths in memory.
 /// </summary>
 public static class IndexBuilder
 {
@@ -14,39 +15,89 @@ public static class IndexBuilder
         string volume,
         string indexPath,
         Func<string, bool>? skip = null,
-        Action<long>? onEnumerated = null)
+        Action<long>? onEnumerated = null,
+        string? quietIndexDirectory = null)
     {
         using UsnVolume usn = UsnVolume.Open(volume);
-        return Build(usn, indexPath, skip, onEnumerated);
+        return Build(usn, indexPath, skip, onEnumerated, quietIndexDirectory);
     }
 
     public static IndexBuildResult Build(
         UsnVolume usn,
         string indexPath,
         Func<string, bool>? skip = null,
-        Action<long>? onEnumerated = null)
+        Action<long>? onEnumerated = null,
+        string? quietIndexDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(usn);
         ArgumentException.ThrowIfNullOrWhiteSpace(indexPath);
 
-        var entries = new Dictionary<ulong, UsnEntry>(capacity: 1 << 18);
-        long seen = 0;
+        // Pass 1: Collect directories only.
+        var directories = new Dictionary<ulong, UsnEntry>(capacity: 1 << 16);
+        long enumerated = 0;
 
-        long enumerated = usn.Enumerate(entry =>
+        usn.Enumerate(entry =>
         {
-            if (entry.FileId == UsnPathResolver.RootFileId)
+            enumerated++;
+            if (UsnPathResolver.IsRoot(entry.FileId))
             {
                 return;
             }
 
-            entries[entry.FileId] = entry;
-            onEnumerated?.Invoke(++seen);
+            if (entry.IsDirectory)
+            {
+                directories[entry.FileId & UsnPathResolver.MftRecordMask] = entry;
+            }
+
+            onEnumerated?.Invoke(enumerated);
         });
 
-        UsnJournalState journal = usn.QueryJournal();
-        int written = IndexWriter.Write(indexPath, UsnPathResolver.Resolve(entries, usn.Root, skip));
+        // Resolve directory paths. Skipped directories and the noisy ones the
+        // change filter names are remembered by id, so the service can tell
+        // which later journal records are worth a rebuild.
+        var quiet = new HashSet<ulong>();
+        Dictionary<ulong, string> resolvedDirs = UsnPathResolver.ResolveDirectoryPaths(directories, usn.Root, skip, quiet);
 
-        return new IndexBuildResult(written, enumerated, entries.Count, usn.Root, journal);
+        foreach (var (key, dirPath) in resolvedDirs)
+        {
+            if (ChangeFilter.IsQuietPath(dirPath, quietIndexDirectory))
+            {
+                quiet.Add(key);
+            }
+        }
+
+        // Free unneeded directory entries before streaming files
+        directories.Clear();
+        directories.TrimExcess();
+
+        // Pass 2: Stream all records directly into the index file
+        using var writer = new IndexStreamWriter(indexPath);
+
+        // Write directories first
+        foreach (var (_, dirPath) in resolvedDirs)
+        {
+            writer.Write(dirPath, isDirectory: true);
+        }
+
+        // Stream all non-directory files
+        usn.Enumerate(entry =>
+        {
+            if (entry.IsDirectory || UsnPathResolver.IsRoot(entry.FileId))
+            {
+                return;
+            }
+
+            ulong parentKey = entry.ParentId & UsnPathResolver.MftRecordMask;
+            if (resolvedDirs.TryGetValue(parentKey, out string? parentPath))
+            {
+                writer.WriteCombined(parentPath, entry.Name, isDirectory: false, skip);
+            }
+        });
+
+        int written = writer.Finish();
+        UsnJournalState journal = usn.QueryJournal();
+
+        return new IndexBuildResult(written, enumerated, resolvedDirs.Count, usn.Root, journal, new ChangeFilter(quiet));
     }
 }
 
@@ -55,4 +106,5 @@ public readonly record struct IndexBuildResult(
     long EnumeratedRecords,
     int ResolvedCandidates,
     string Root,
-    UsnJournalState Journal);
+    UsnJournalState Journal,
+    ChangeFilter Changes);
