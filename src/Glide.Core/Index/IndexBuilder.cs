@@ -32,6 +32,10 @@ public static class IndexBuilder
         ArgumentNullException.ThrowIfNull(usn);
         ArgumentException.ThrowIfNullOrWhiteSpace(indexPath);
 
+        // Anchor the journal before reading anything: a change made while the
+        // index is built is replayed by the next read instead of being lost.
+        UsnJournalState journal = usn.QueryJournal();
+
         // Pass 1: Collect directories only.
         var directories = new Dictionary<ulong, UsnEntry>(capacity: 1 << 16);
         long enumerated = 0;
@@ -95,7 +99,6 @@ public static class IndexBuilder
         });
 
         int written = writer.Finish();
-        UsnJournalState journal = usn.QueryJournal();
 
         return new IndexBuildResult(written, enumerated, resolvedDirs.Count, usn.Root, journal, new ChangeFilter(quiet));
     }

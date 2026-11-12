@@ -1,6 +1,6 @@
 # The index
 
-One file per volume, written by `glide-service`, streamed by the launcher.
+One file per volume, written by the index service (`glide.exe --service`), streamed by the launcher.
 
 ## Why not scan folders
 
@@ -56,7 +56,7 @@ byte order and UTF-16 code-unit order are not the same outside ASCII.
 
 ## Filling it
 
-`glide-service` opens `\\.\C:` and calls `FSCTL_ENUM_USN_DATA`. That returns one
+The service opens `\\.\C:` and calls `FSCTL_ENUM_USN_DATA`. That returns one
 record per file with its name and the id of its parent, in file-id order. Paths
 are rebuilt by following parent links up to the volume root (file id 5), with
 directory paths memoized: a million files live in tens of thousands of
@@ -71,13 +71,33 @@ users cannot open them, and they would only add noise.
 
 ## Keeping it current
 
-The service does not apply change records one by one. After the initial
-enumeration it remembers the journal's `NextUsn` and polls every two seconds.
-When relevant records appear it waits for three quiet seconds (at most fifteen
-on a busy drive, at least ten between rebuilds), then rebuilds the whole file:
-an enumeration plus a sequential write, 83 ms for a million entries. A rebuild
-cannot drift, and it is simpler than tracking renames, hard links, and the
-journal being wrapped by its own size limit.
+After the initial enumeration the service remembers the journal's `NextUsn`
+(taken before the enumeration, so changes made during a build are read again)
+and polls every second.
+
+### The delta (v0.7.0)
+
+Rebuilding C: takes 6–12 s on a real drive with 1.3M entries, so a rebuild per
+change meant new files showed up 10–15 s late and kept a core busy. Now each
+relevant record goes into the volume's delta file right away:
+
+- `index-c.delta` sits next to `index-c.gidx`: a header line, then
+  `+<TAB>f|d<TAB>path` for a path that exists now and `-<TAB>path` for one that
+  does not, the last line for a path winning. It is replaced in one rename.
+- A record names only its parent's file id. `UsnVolume.TryGetPathById`
+  (`OpenFileById` + `GetFinalPathNameByHandle`) turns that into a path, with a
+  small cache of directory ids (`IndexDeltaRecorder`).
+- The launcher stats the delta on each search and rereads it only when it
+  changed. `IndexSearchSource.SearchMany` drops index rows the delta names,
+  then scores the delta's added paths with the same scorer and constraints, so
+  a delta row ranks exactly like an index row.
+
+A new, deleted or renamed file is therefore searchable about a second after the
+journal records it. A full rebuild still happens, debounced as before (three
+quiet seconds, at most fifteen, at least ten between rebuilds), but only when
+the delta cannot say what changed: a folder renamed or deleted moves every path
+below it, a parent that can no longer be opened, or a delta past 5,000 paths.
+The rebuild folds the delta in and deletes the file.
 
 ### Which records count (v0.6.0)
 
@@ -129,4 +149,4 @@ enumeration itself is not exercised by the test suite on a normal account. What
 is tested is everything downstream: parsing synthetic `USN_RECORD_V2` buffers,
 path reconstruction from parent links, cycle and orphan handling, and the index
 round trip. The volume call itself is verified by running
-`glide-service --build` from an elevated prompt.
+`glide --service-build` from an elevated prompt.

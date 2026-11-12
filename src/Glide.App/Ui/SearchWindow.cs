@@ -58,6 +58,13 @@ internal sealed class SearchWindow
     private bool _trackingMouse;
     private int _lastMouseX = -1;
     private int _lastMouseY = -1;
+
+    // Dragging a row out: armed on button down over a file or folder row,
+    // started once the pointer leaves the system drag rectangle.
+    private int _dragRow = -1;
+    private int _dragStartX;
+    private int _dragStartY;
+    private bool _dragging;
     private bool _visible;
     private long _shownAt;
     private bool _indexing;
@@ -936,6 +943,11 @@ internal sealed class SearchWindow
                 return IntPtr.Zero;
 
             case NativeMethods.WmMouseMove:
+                if (TryStartDrag(wParam, lParam))
+                {
+                    return IntPtr.Zero;
+                }
+
                 OnMouseMove(lParam);
                 return IntPtr.Zero;
 
@@ -948,9 +960,11 @@ internal sealed class SearchWindow
 
             case NativeMethods.WmLButtonDown:
                 SelectRowAt(lParam);
+                ArmDrag(lParam);
                 return IntPtr.Zero;
 
             case NativeMethods.WmLButtonUp:
+                _dragRow = -1;
                 if (IsSettingsButtonClick(lParam))
                 {
                     ShowOptions();
@@ -995,7 +1009,7 @@ internal sealed class SearchWindow
                 {
                     NativeMethods.KillTimer(_hwnd, (UIntPtr)FocusCheckTimerId);
 
-                    if (_visible && _notice is null && _settings.HideWhenLosingFocus && NativeMethods.GetForegroundWindow() != _hwnd)
+                    if (_visible && !_dragging && _notice is null && _settings.HideWhenLosingFocus && NativeMethods.GetForegroundWindow() != _hwnd)
                     {
                         Hide();
                     }
@@ -1383,6 +1397,96 @@ internal sealed class SearchWindow
         }
 
         return -1;
+    }
+
+    /// <summary>
+    /// Remembers where the button went down when it went down on a file or
+    /// folder row; calculator, web and command rows have nothing to drag.
+    /// </summary>
+    private void ArmDrag(IntPtr lParam)
+    {
+        _dragRow = -1;
+        if (_calculatorResult is not null || _searching)
+        {
+            return;
+        }
+
+        int row = GetRowAt(lParam);
+        if (row < 0 || row >= _results.Length ||
+            _results[row].Kind is SearchResultKind.WebSearch or SearchResultKind.Command)
+        {
+            return;
+        }
+
+        _dragRow = row;
+        _dragStartX = (short)(lParam.ToInt64() & 0xFFFF);
+        _dragStartY = (short)((lParam.ToInt64() >> 16) & 0xFFFF);    }
+
+    /// <summary>
+    /// Starts the shell drag once the pointer, button still down, has moved
+    /// far enough from where it was pressed. Returns true when it handled the
+    /// move, so hover selection does not jump to another row mid-press.
+    /// </summary>
+    private bool TryStartDrag(IntPtr wParam, IntPtr lParam)
+    {
+        const long MkLButton = 0x0001;
+
+        if (_dragRow == -1)
+        {
+            return false;
+        }
+
+        if ((wParam.ToInt64() & MkLButton) == 0)
+        {
+            _dragRow = -1;
+            return false;
+        }
+
+        int x = (short)(lParam.ToInt64() & 0xFFFF);
+        int y = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
+        if (!FileDrag.PassedThreshold(_dragStartX, _dragStartY, x, y))
+        {
+            return true;
+        }
+
+        int row = _dragRow;
+        _dragRow = -1;
+        if (row >= _results.Length)
+        {
+            return true;
+        }
+
+        string path = _results[row].Entry.Path;
+        if (!File.Exists(path) && !Directory.Exists(path))
+        {
+            AppLog.Write($"drag: not on disk, skipped: {path}");
+            return true;
+        }
+
+        // The drag loop is modal and swallows the button-up, so the press that
+        // started it never reaches "open". _dragging also keeps the launcher
+        // from hiding while the pointer is over other windows.
+        _dragging = true;
+        bool dropped;
+        try
+        {
+            dropped = FileDrag.Start(_hwnd, path);
+        }
+        finally
+        {
+            _dragging = false;
+        }
+
+        if (dropped)
+        {
+            HistoryStore.Default.Add(path);
+            if (!_docked)
+            {
+                Hide();
+            }
+        }
+
+        return true;
     }
 
     private bool SelectRowAt(IntPtr lParam)
@@ -2230,8 +2334,14 @@ internal sealed class SearchWindow
 
             if (!rows.Exists(r => string.Equals(r.Entry.Path, path, StringComparison.OrdinalIgnoreCase)))
             {
-                // No disk check here: a history entry on a disconnected share
-                // would stall the window for the network timeout on every open.
+                // Only local fixed drives are checked: a history entry on a
+                // disconnected share would stall for the network timeout.
+                if (HistoryStore.IsKnownMissing(path))
+                {
+                    HistoryStore.Default.Remove(path);
+                    continue;
+                }
+
                 rows.Add(new SearchResult(new FileEntry(path, false, 0, DateTime.MinValue), 0, [], SearchResultKind.History));
             }
         }
@@ -2470,7 +2580,7 @@ internal sealed class SearchWindow
             return;
         }
 
-        if (state is 1 or 2 || !_visible || !_settings.HideWhenLosingFocus)
+        if (state is 1 or 2 || !_visible || !_settings.HideWhenLosingFocus || _dragging)
         {
             return;
         }

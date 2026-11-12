@@ -67,6 +67,49 @@ public sealed class HistoryStore
         }
     }
 
+    /// <summary>Forgets <paramref name="path"/>, e.g. after it was deleted or renamed.</summary>
+    public void Remove(string path)
+    {
+        lock (_gate)
+        {
+            string[] current = _items ??= Read();
+            if (Array.FindIndex(current, item => string.Equals(item, path, StringComparison.OrdinalIgnoreCase)) < 0)
+            {
+                return;
+            }
+
+            Save([.. current.Where(item => !string.Equals(item, path, StringComparison.OrdinalIgnoreCase))]);
+        }
+    }
+
+    /// <summary>
+    /// True when <paramref name="path"/> is on a local fixed drive and no longer
+    /// exists. Paths on network, removable or unknown drives are never checked,
+    /// so a disconnected share cannot stall the caller for a network timeout.
+    /// </summary>
+    public static bool IsKnownMissing(string path)
+    {
+        if (path.Length < 3 || path[1] != ':' || !char.IsAsciiLetter(path[0]) ||
+            (path[2] != '\\' && path[2] != '/'))
+        {
+            return false;
+        }
+
+        try
+        {
+            if (new DriveInfo(path[..1]).DriveType != DriveType.Fixed)
+            {
+                return false;
+            }
+
+            return !File.Exists(path) && !Directory.Exists(path);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private void Save(string[] items)
     {
         _items = items;

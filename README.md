@@ -153,16 +153,20 @@ Without arguments the launcher picks up `index-*.gidx` files from
 ## Service
 
 Reading a volume's USN journal needs administrator rights. Installing the service
-once means the index stays current without an elevation prompt at every start:
+once means the index stays current without an elevation prompt at every start.
+The service is part of `glide.exe`: the SCM starts `glide.exe --service`, a
+second process that only indexes, while the launcher itself stays unelevated.
 
 ```
-dotnet publish src\Glide.Service\Glide.Service.csproj -c Release -r win-x64 -o artifacts\publish\service
-artifacts\publish\service\glide-service.exe --install     (elevated)
+artifacts\publish\glide.exe --service-install     (elevated)
 ```
 
-`--build` writes the indexes once and exits, and `--console` runs the same loop in
-the foreground for debugging. `--uninstall` removes the service and leaves the
-index files in `%ProgramData%\Glide`. Both need an elevated prompt.
+`--service-install` also moves an existing `GlideIndex` service (for example one
+registered from the old `glide-service.exe`) to this executable.
+`--service-build` writes the indexes once and exits, and `--service-console`
+runs the same loop in the foreground for debugging. `--service-uninstall`
+removes the service and leaves the index files in `%ProgramData%\Glide`. All
+of them need an elevated prompt.
 
 ## Build
 
@@ -170,7 +174,6 @@ index files in `%ProgramData%\Glide`. Both need an elevated prompt.
 dotnet build Glide.sln
 dotnet test Glide.sln
 dotnet publish src\Glide.App\Glide.App.csproj -c Release -r win-x64 -o artifacts\publish
-dotnet publish src\Glide.Service\Glide.Service.csproj -c Release -r win-x64 -o artifacts\publish\service
 powershell -File scripts\ui-smoke.ps1 -AppArgs "--index artifacts\bench-100k.gidx --hotkey Ctrl+Shift+Alt+F9 --theme dark" -Hotkey "Ctrl+Shift+Alt+F9"
 ```
 

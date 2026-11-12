@@ -30,6 +30,32 @@ public sealed class HistoryStoreTests : IDisposable
     }
 
     [Fact]
+    public void Remove_ForgetsThePathAndPersists()
+    {
+        HistoryStore store = Store();
+        store.Add(@"C:\One");
+        store.Add(@"C:\Two");
+
+        store.Remove(@"c:\one");
+
+        Assert.Equal([@"C:\Two"], store.Items);
+        Assert.Equal([@"C:\Two"], new HistoryStore(_file).Items);
+    }
+
+    [Fact]
+    public void IsKnownMissing_ChecksLocalPathsOnly()
+    {
+        string existing = Path.Combine(_directory, "here.txt");
+        File.WriteAllText(existing, "x");
+
+        Assert.False(HistoryStore.IsKnownMissing(existing));
+        Assert.False(HistoryStore.IsKnownMissing(_directory));
+        Assert.True(HistoryStore.IsKnownMissing(Path.Combine(_directory, "gone.txt")));
+        Assert.False(HistoryStore.IsKnownMissing(@"\\server\share\gone.txt"));
+        Assert.False(HistoryStore.IsKnownMissing("relative.txt"));
+    }
+
+    [Fact]
     public void Add_TrimsToTheLimit()
     {
         HistoryStore store = Store();

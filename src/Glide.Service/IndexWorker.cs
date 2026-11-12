@@ -8,14 +8,18 @@ namespace Glide.Service;
 /// <summary>
 /// Keeps one index file per fixed NTFS volume up to date.
 ///
-/// v0.4.0 rebuilds the whole file when the journal moves instead of applying the
-/// change records one by one: a rebuild is an enumeration of the journal plus a
-/// single sequential write, which measured 83 ms for a million entries, and it
-/// cannot drift. Incremental updates are the next step.
+/// The journal is read every second. A file or folder that is created,
+/// deleted or renamed goes into the volume's delta file right away, which
+/// searches lay over the index, so it shows up within about a second. The
+/// index itself is rebuilt only when the delta cannot say what changed (a
+/// folder renamed or deleted moves everything below it, or a parent that can
+/// no longer be found) or when the delta has grown large; the rebuild folds
+/// the delta in and deletes it.
 /// </summary>
 internal sealed class IndexWorker
 {
-    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(1);
+    private const int MaxDeltaEntries = 5000;
     private static readonly TimeSpan QuietPeriod = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan MaxDelay = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan MinRebuildInterval = TimeSpan.FromSeconds(10);
@@ -111,17 +115,29 @@ internal sealed class IndexWorker
         {
             // Only creates, deletes and renames are requested, so data writes to
             // logs and databases never reach this process. The filter then drops
-            // records from quiet folders, including this service's own index
-            // and log writes, which would otherwise schedule the next rebuild.
-            bool relevant = false;
+            // records from quiet folders, including this service's own index,
+            // delta and log writes. What is left goes into the delta now.
+            bool changed = false;
             ChangeFilter filter = volume.Changes;
+            IndexDeltaRecorder recorder = volume.Recorder;
             volume.Journal = volume.Volume.ReadChanges(
                 volume.Journal,
                 UsnVolume.NameChangeReasons,
                 volume.Buffer,
-                entry => relevant |= filter.IsRelevant(entry));
+                entry =>
+                {
+                    if (filter.IsRelevant(entry))
+                    {
+                        changed |= recorder.Apply(entry);
+                    }
+                });
 
-            if (relevant)
+            if (changed)
+            {
+                SaveDelta(volume);
+            }
+
+            if (recorder.NeedsRebuild || recorder.Delta.Count > MaxDeltaEntries)
             {
                 long now = Stopwatch.GetTimestamp();
                 volume.FirstChange ??= now;
@@ -174,6 +190,11 @@ internal sealed class IndexWorker
             volume.Journal = result.Journal;
             volume.Changes = result.Changes;
 
+            // The new index holds everything up to the journal position the
+            // build started from; changes after it are read again next poll.
+            volume.Recorder.Reset();
+            IndexDelta.Delete(IndexDelta.PathFor(indexPath));
+
             if (result.IndexedEntries == 0)
             {
                 Log.Write($"{volume.Letter}: USN journal returned 0 entries; falling back to full directory scan...");
@@ -200,6 +221,22 @@ internal sealed class IndexWorker
         finally
         {
             MemoryTrimmer.Trim();
+        }
+    }
+
+    private static void SaveDelta(VolumeState volume)
+    {
+        try
+        {
+            volume.Recorder.Delta.Save(IndexDelta.PathFor(IndexPathFor(volume.Letter)));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Searches keep the previous delta; a rebuild catches up.
+            Log.Write($"{volume.Letter}: writing the delta failed: {ex.Message}");
+            long now = Stopwatch.GetTimestamp();
+            volume.FirstChange ??= now;
+            volume.LastChange = now;
         }
     }
 
@@ -237,7 +274,10 @@ internal sealed class IndexWorker
             Letter = letter;
             Volume = volume;
             Root = volume.Root;
+            Recorder = new IndexDeltaRecorder(id => volume.TryGetPathById(id, out string path) ? path : null);
         }
+
+        internal IndexDeltaRecorder Recorder { get; }
 
         internal string Letter { get; }
 

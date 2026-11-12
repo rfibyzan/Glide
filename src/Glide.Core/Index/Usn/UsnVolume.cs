@@ -200,10 +200,104 @@ public sealed partial class UsnVolume : IDisposable
         return state;
     }
 
+    /// <summary>
+    /// The current full path of a file or directory, by its file reference
+    /// number, for example <c>C:\Users\me\Downloads</c>. False when it no longer
+    /// exists. Needs the same rights as reading the journal.
+    /// </summary>
+    public bool TryGetPathById(ulong fileId, out string path)
+    {
+        path = string.Empty;
+
+        if (UsnPathResolver.IsRoot(fileId))
+        {
+            path = Root;
+            return true;
+        }
+
+        const uint FileReadAttributes = 0x80;
+        var descriptor = new FileIdDescriptor { Size = (uint)Marshal.SizeOf<FileIdDescriptor>(), Type = 0, FileId = (long)fileId };
+
+        using SafeFileHandle file = OpenFileById(_handle, ref descriptor, FileReadAttributes, ShareAll, nint.Zero, BackupSemantics);
+        if (file.IsInvalid)
+        {
+            return false;
+        }
+
+        Span<char> buffer = stackalloc char[1024];
+        uint length;
+        unsafe
+        {
+            fixed (char* pointer = buffer)
+            {
+                length = GetFinalPathNameByHandle(file, pointer, (uint)buffer.Length, 0);
+            }
+        }
+
+        if (length == 0 || length >= buffer.Length)
+        {
+            if (length < buffer.Length)
+            {
+                return false;
+            }
+
+            char[] large = new char[length + 1];
+            unsafe
+            {
+                fixed (char* pointer = large)
+                {
+                    length = GetFinalPathNameByHandle(file, pointer, (uint)large.Length, 0);
+                }
+            }
+
+            if (length == 0 || length >= large.Length)
+            {
+                return false;
+            }
+
+            path = StripDosPrefix(new string(large, 0, (int)length));
+            return true;
+        }
+
+        path = StripDosPrefix(new string(buffer[..(int)length]));
+        return true;
+    }
+
+    private static string StripDosPrefix(string path)
+    {
+        if (path.StartsWith(@"\\?\UNC\", StringComparison.Ordinal))
+        {
+            return @"\\" + path[8..];
+        }
+
+        return path.StartsWith(@"\\?\", StringComparison.Ordinal) ? path[4..] : path;
+    }
+
     public void Dispose()
     {
         _handle.Dispose();
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FileIdDescriptor
+    {
+        public uint Size;
+        public int Type;
+        public long FileId;
+        public long Padding;
+    }
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    private static partial SafeFileHandle OpenFileById(
+        SafeFileHandle volumeHint,
+        ref FileIdDescriptor fileId,
+        uint desiredAccess,
+        uint shareMode,
+        nint securityAttributes,
+        uint flagsAndAttributes);
+
+    [LibraryImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", SetLastError = true)]
+    private static unsafe partial uint GetFinalPathNameByHandle(SafeFileHandle file, char* path, uint length, uint flags);
 
     private int DeviceIoControl(uint code, ReadOnlySpan<byte> input, byte[] output)
     {

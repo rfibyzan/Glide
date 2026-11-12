@@ -63,14 +63,26 @@ public static class IndexSearchSource
             return Array.Empty<SearchResult>();
         }
 
-        if (indexPaths.Count == 1)
+        string[] terms = QueryParser.Parse(query);
+        bool listing = terms.Length == 0 && constraints is null;
+
+        // The service's recent changes, one small file per volume, read again
+        // only when it changed. The empty-query listing ignores them.
+        var deltas = new IndexDelta[indexPaths.Count];
+        bool anyDelta = false;
+
+        for (int i = 0; i < indexPaths.Count; i++)
+        {
+            deltas[i] = listing ? IndexDelta.Empty : IndexDelta.LoadFor(indexPaths[i]);
+            anyDelta |= deltas[i].Count > 0;
+        }
+
+        if (indexPaths.Count == 1 && !anyDelta)
         {
             return Search(indexPaths[0], query, limit, constraints, cancellation);
         }
 
-        string[] terms = QueryParser.Parse(query);
-
-        if (terms.Length == 0 && constraints is null)
+        if (listing)
         {
             var prefix = new List<SearchResult>(limit);
 
@@ -89,22 +101,51 @@ public static class IndexSearchSource
 
         var merged = new List<SearchResult>(limit);
 
-        foreach (string indexPath in indexPaths)
+        for (int i = 0; i < indexPaths.Count; i++)
         {
+            string indexPath = indexPaths[i];
             if (!CoversScope(indexPath, constraints))
             {
                 continue;
             }
 
-            foreach (SearchResult candidate in Search(indexPath, query, limit, constraints, cancellation))
+            IndexDelta delta = deltas[i];
+
+            // The delta overrides the index for every path it names: a removed
+            // path is dropped, an added one is scored from the delta, so neither
+            // shows twice. Ask the index for enough extra rows to stay full
+            // after the removed ones are dropped.
+            int extra = Math.Min(delta.RemovedCount, MaxDeltaOverfetch);
+
+            foreach (SearchResult candidate in Search(indexPath, query, limit + extra, constraints, cancellation))
             {
+                if (delta.Count > 0 && delta.Covers(candidate.Entry.Path))
+                {
+                    continue;
+                }
+
                 EntryScorer.Insert(merged, candidate.Score, candidate.Entry.Path, candidate.Entry.IsDirectory, limit);
+            }
+
+            foreach ((string path, bool isDirectory) in delta.Added())
+            {
+                if (constraints is not null && !constraints.Accepts(path.AsSpan(), isDirectory))
+                {
+                    continue;
+                }
+
+                if (EntryScorer.TryScore(path.AsSpan(), terms, out int score))
+                {
+                    EntryScorer.Insert(merged, score, path, isDirectory, limit);
+                }
             }
         }
 
         EntryScorer.FillPositions(merged, terms);
         return merged;
     }
+
+    private const int MaxDeltaOverfetch = 1000;
 
     public static int Count(string indexPath)
     {

@@ -15,8 +15,29 @@ internal static class Program
     private const int ResultLimit = 50;
     private const string InstanceMutexName = @"Local\Glide.Singleton";
 
+    // The window thread must be a single-threaded apartment: OLE drag and drop
+    // refuses anything else, and without this the runtime makes it MTA before
+    // any CoInitializeEx of ours can run.
+    [STAThread]
     private static int Main(string[] args)
     {
+        // The index service lives in this executable too: the SCM starts
+        // "glide.exe --service". It returns before any launcher state exists.
+        if (args.Length > 0 && args[0].StartsWith(Glide.Service.ServiceCommands.ServiceFlag, StringComparison.Ordinal))
+        {
+            if (args[0] != Glide.Service.ServiceCommands.ServiceFlag)
+            {
+                // A windowed executable has no console; borrow the caller's
+                // so install and build messages are visible.
+                AttachConsole(AttachParentProcess);
+            }
+
+            if (Glide.Service.ServiceCommands.TryRun(args[0], Environment.ProcessPath ?? "glide.exe") is int code)
+            {
+                return code;
+            }
+        }
+
         try
         {
             if (HasFlag(args, "--bench"))
@@ -116,6 +137,11 @@ internal static class Program
 
     [System.Runtime.InteropServices.DllImport("ole32.dll")]
     private static extern int CoInitializeEx(IntPtr reserved, uint flags);
+
+    private const uint AttachParentProcess = unchecked((uint)-1);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern bool AttachConsole(uint processId);
 
     private static int RunUi(string[] args)
     {
@@ -462,6 +488,7 @@ internal static class Program
         Console.WriteLine("  glide --index-info <index>");
         Console.WriteLine("  glide --index-bench <index> [--query <text>] [--iterations <n>] [--warmup <n>] [--repeats <n>] [--budget-ms <n>]");
         Console.WriteLine("  glide --index-bench-io <index> [--iterations <n>]");
+        Glide.Service.ServiceCommands.PrintUsage(Console.Out);
     }
 
     private static double Percentile(double[] sorted, double fraction)

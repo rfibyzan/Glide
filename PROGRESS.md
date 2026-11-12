@@ -230,8 +230,8 @@ not a blank window.
    (`tests/Glide.Core.Tests/UsnTests.cs`), never against a live journal.
    To close this, from an elevated prompt:
    ```
-   artifacts\publish\service\glide-service.exe --install
-   artifacts\publish\service\glide-service.exe --console   # watch one rebuild
+   artifacts\publish\glide.exe --service-install
+   artifacts\publish\glide.exe --service-console   # watch one rebuild
    ```
    Then confirm `%ProgramData%\Glide\index-C.gidx` exists and `glide` finds it with
    no arguments.
@@ -300,7 +300,6 @@ binary:
 dotnet build Glide.sln -c Release
 dotnet test Glide.sln -c Release
 dotnet publish src\Glide.App\Glide.App.csproj -c Release -r win-x64 -o artifacts\publish
-dotnet publish src\Glide.Service\Glide.Service.csproj -c Release -r win-x64 -o artifacts\publish\service
 powershell -File scripts\ui-smoke.ps1 -AppArgs "--index artifacts\bench-100k.gidx --hotkey Ctrl+Shift+Alt+F9 --theme dark" -Hotkey "Ctrl+Shift+Alt+F9"
 ```
 

@@ -1,28 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- The index service, linked into glide.exe: one executable runs either the
+       launcher or, started by the SCM with the service flag, the indexer. Only the
+       service process reads the USN journal; the launcher never loads it. -->
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <OutputType>Library</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>Glide.Service</RootNamespace>
-    <AssemblyName>glide-service</AssemblyName>
-
-    <!-- The service is the only process allowed to read the USN journal, so it
-         must be small and self-contained. -->
-    <PublishAot>true</PublishAot>
-    <InvariantGlobalization>true</InvariantGlobalization>
-    <UseSystemResourceKeys>true</UseSystemResourceKeys>
-    <IlcOptimizationPreference>Size</IlcOptimizationPreference>
-    <TrimmerSingleWarn>false</TrimmerSingleWarn>
-
-    <!-- Idle memory: no background GC thread, and compact rather than grow. -->
-    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
-    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <AssemblyName>Glide.Service</AssemblyName>
+    <IsAotCompatible>true</IsAotCompatible>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
-
-  <ItemGroup>
-    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
-  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Glide.Core\Glide.Core.csproj" />

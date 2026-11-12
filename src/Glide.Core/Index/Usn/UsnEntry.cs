@@ -7,13 +7,25 @@ namespace Glide.Core.Index.Usn;
 /// One record from the volume's USN journal: a file id, the id of its parent
 /// directory, and the file name on its own. Full paths are reconstructed from
 /// the parent links, which is why an enumeration has to be held in memory while
-/// it is resolved.
+/// it is resolved. <see cref="Reason"/> is the USN_REASON mask of a journal
+/// read; an enumeration of the MFT leaves it zero.
 /// </summary>
-public readonly record struct UsnEntry(ulong FileId, ulong ParentId, uint Attributes, string Name)
+public readonly record struct UsnEntry(ulong FileId, ulong ParentId, uint Attributes, string Name, uint Reason = 0)
 {
     public const uint DirectoryAttribute = 0x10;
 
+    public const uint ReasonFileCreate = 0x0000_0100;
+    public const uint ReasonFileDelete = 0x0000_0200;
+    public const uint ReasonRenameOldName = 0x0000_1000;
+    public const uint ReasonRenameNewName = 0x0000_2000;
+
     public bool IsDirectory => (Attributes & DirectoryAttribute) != 0;
+
+    /// <summary>The name stopped existing at this place: deleted, or renamed away.</summary>
+    public bool IsRemoval => (Reason & (ReasonFileDelete | ReasonRenameOldName)) != 0;
+
+    /// <summary>The name started existing at this place: created, or renamed to.</summary>
+    public bool IsAddition => !IsRemoval && (Reason & (ReasonFileCreate | ReasonRenameNewName)) != 0;
 }
 
 /// <summary>
@@ -64,7 +76,8 @@ public static class UsnRecordParser
             BinaryPrimitives.ReadUInt64LittleEndian(record[8..]),
             BinaryPrimitives.ReadUInt64LittleEndian(record[16..]),
             BinaryPrimitives.ReadUInt32LittleEndian(record[52..]),
-            Encoding.Unicode.GetString(record.Slice(nameOffset, nameLength)));
+            Encoding.Unicode.GetString(record.Slice(nameOffset, nameLength)),
+            BinaryPrimitives.ReadUInt32LittleEndian(record[40..]));
 
         return true;
     }
