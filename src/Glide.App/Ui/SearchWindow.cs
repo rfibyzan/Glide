@@ -2370,7 +2370,8 @@ internal sealed class SearchWindow
                     continue;
                 }
 
-                rows.Add(new SearchResult(new FileEntry(path, false, 0, DateTime.MinValue), 0, [], SearchResultKind.History));
+                bool isDirectory = HistoryStore.IsKnownDirectory(path);
+                rows.Add(new SearchResult(new FileEntry(path, isDirectory, 0, DateTime.MinValue), 0, [], SearchResultKind.History));
             }
         }
 
@@ -2424,7 +2425,7 @@ internal sealed class SearchWindow
             if (!alreadyListed)
             {
                 matchedBookmarks.Add(new SearchResult(
-                    new FileEntry(bookmark, false, 0, DateTime.MinValue),
+                    new FileEntry(bookmark, HistoryStore.IsKnownDirectory(bookmark), 0, DateTime.MinValue),
                     0,
                     [],
                     SearchResultKind.Bookmark));

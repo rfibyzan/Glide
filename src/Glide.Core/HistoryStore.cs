@@ -87,7 +87,18 @@ public sealed class HistoryStore
     /// exists. Paths on network, removable or unknown drives are never checked,
     /// so a disconnected share cannot stall the caller for a network timeout.
     /// </summary>
-    public static bool IsKnownMissing(string path)
+    public static bool IsKnownMissing(string path) =>
+        IsOnFixedDrive(path) && !File.Exists(path) && !Directory.Exists(path);
+
+    /// <summary>
+    /// Whether a history entry is a folder. Only local fixed drives are
+    /// checked, so a disconnected share never stalls the caller; elsewhere a
+    /// trailing separator is the only hint.
+    /// </summary>
+    public static bool IsKnownDirectory(string path) =>
+        path.EndsWith('\\') || path.EndsWith('/') || (IsOnFixedDrive(path) && Directory.Exists(path));
+
+    private static bool IsOnFixedDrive(string path)
     {
         if (path.Length < 3 || path[1] != ':' || !char.IsAsciiLetter(path[0]) ||
             (path[2] != '\\' && path[2] != '/'))
@@ -97,12 +108,7 @@ public sealed class HistoryStore
 
         try
         {
-            if (new DriveInfo(path[..1]).DriveType != DriveType.Fixed)
-            {
-                return false;
-            }
-
-            return !File.Exists(path) && !Directory.Exists(path);
+            return new DriveInfo(path[..1]).DriveType == DriveType.Fixed;
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
         {
