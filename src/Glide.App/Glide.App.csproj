@@ -1,9 +1,10 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>Glide.App</RootNamespace>
+    <ApplicationIcon>glide.ico</ApplicationIcon>
     <AssemblyName>glide</AssemblyName>
 
     <!-- NativeAOT is the whole point of the memory budget. -->
@@ -12,7 +13,16 @@
     <UseSystemResourceKeys>true</UseSystemResourceKeys>
     <IlcOptimizationPreference>Size</IlcOptimizationPreference>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- Idle memory: no background GC thread, and compact rather than grow. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
   </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Glide.Core\Glide.Core.csproj" />

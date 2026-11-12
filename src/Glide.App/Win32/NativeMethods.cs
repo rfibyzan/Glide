@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace Glide.App.Win32;
 
@@ -6,6 +7,9 @@ public static class NativeMethods
 {
     public const int WsPopup = unchecked((int)0x80000000);
     public const int WsExTopmost = 0x00000008;
+
+    /// <summary>Keeps a window off the taskbar and out of Alt+Tab.</summary>
+    public const int WsExToolWindow = 0x00000080;
     public const int CsDropShadow = 0x00020000;
 
     public const int SwHide = 0;
@@ -14,15 +18,25 @@ public static class NativeMethods
     public const uint WmDestroy = 0x0002;
     public const uint WmSize = 0x0005;
     public const uint WmActivate = 0x0006;
+    public const uint WmSetText = 0x000C;
+    public const uint WmGetText = 0x000D;
     public const uint WmPaint = 0x000F;
     public const uint WmEraseBkgnd = 0x0014;
     public const uint WmKeyDown = 0x0100;
+    public const uint WmKeyUp = 0x0101;
     public const uint WmChar = 0x0102;
+    public const uint WmCommand = 0x0111;
     public const uint WmLButtonDown = 0x0201;
     public const uint WmLButtonDblClk = 0x0203;
+    public const uint WmMouseMove = 0x0200;
+    public const uint WmMouseWheel = 0x020A;
+    public const uint WmMouseLeave = 0x02A3;
+    public const uint TmeLeave = 0x00000002;
     public const uint WmHotkey = 0x0312;
     public const uint WmTimer = 0x0113;
     public const uint WmApp = 0x8000;
+    public const uint WmSysKeyDown = 0x0104;
+    public const uint WmSysChar = 0x0106;
 
     public const int VkBack = 0x08;
     public const int VkTab = 0x09;
@@ -95,6 +109,8 @@ public static class NativeMethods
 
     public const int Transparent = 1;
     public const uint DtLeft = 0x0000;
+    public const uint DtCenter = 0x0001;
+    public const uint DtRight = 0x0002;
     public const uint DtVCenter = 0x0004;
     public const uint DtSingleLine = 0x0020;
     public const uint DtNoPrefix = 0x0800;
@@ -350,7 +366,22 @@ public static class NativeMethods
     public static extern IntPtr FindWindowW(string? className, string? windowName);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr FindWindowExW(IntPtr parent, IntPtr childAfter, string? className, string? windowName);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetClassNameW(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetDlgItem(IntPtr hDlg, int nIDDlgItem);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr SendMessageW(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr SendMessageW(IntPtr hWnd, uint message, IntPtr wParam, string lParam);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern bool PostMessageW(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
@@ -370,6 +401,9 @@ public static class NativeMethods
     [DllImport("user32.dll")]
     public static extern bool IsClipboardFormatAvailable(uint format);
 
+    [DllImport("user32.dll")]
+    public static extern bool DestroyWindow(IntPtr hWnd);
+
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr ShellExecuteW(
         IntPtr hWnd,
@@ -384,6 +418,18 @@ public static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern bool SetProcessDpiAwarenessContext(IntPtr context);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct TrackMouseEventStructure
+    {
+        public uint cbSize;
+        public uint dwFlags;
+        public IntPtr hwndTrack;
+        public uint dwHoverTime;
+    }
+
+    [DllImport("user32.dll")]
+    public static extern bool TrackMouseEvent(ref TrackMouseEventStructure lpEventTrack);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr GetModuleHandleW(string? moduleName);
